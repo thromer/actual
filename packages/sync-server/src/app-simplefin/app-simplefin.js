@@ -367,7 +367,7 @@ async function getAccounts(
     if (endDate) {
       params.append('end-date', normalizeDate(endDate));
     }
-    params.append('pending', '1');
+    // params.append('pending', '1');  TODO: THROMER
   } else {
     params.append('balances-only', '1');
   }
@@ -380,7 +380,7 @@ async function getAccounts(
 
   const url = new URL(`${sfin.baseUrl}/accounts`);
   url.search = params.toString();
-
+  console.log(`THROMER GET ${url.toString()}`);
   const response = await fetch(url.toString(), {
     method: 'GET',
     headers,

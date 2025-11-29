@@ -171,6 +171,7 @@ function sendServerStartedMessage() {
 }
 
 export async function run() {
+  console.log('src/app.ts: Hello, Ted!');
   const portVal = config.get('port');
   const port = typeof portVal === 'string' ? parseInt(portVal) : portVal;
   const hostname = config.get('hostname');
