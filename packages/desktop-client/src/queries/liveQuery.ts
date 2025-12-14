@@ -165,6 +165,7 @@ export class LiveQuery<TResponse = unknown> {
   ) => {
     const previousData = this.data;
     this.updateData(updateFn);
+    console.debug(`${Number(performance.now()/1000).toFixed(9)} liveQuery:_optimisticUpdate: calling onData`);
     this.onData(this.data, previousData);
   };
 
@@ -193,7 +194,7 @@ export class LiveQuery<TResponse = unknown> {
 
     try {
       const { data, dependencies } = await runQuery();
-
+      console.debug(`${Number(performance.now()/1000).toFixed(9)} liveQuery:fetchData: runQuery returned`);
       // Regardless if this request was cancelled or not, save the
       // dependencies. The query can't change so all requests will
       // return the same deps.
@@ -214,11 +215,12 @@ export class LiveQuery<TResponse = unknown> {
           this.data = data as Data<TResponse>;
         }
 
+	console.debug(`${Number(performance.now()/1000).toFixed(9)} liveQuery:fetchData: calling onData`);
         this.onData(this.data, previousData);
         this.inflightRequestId = null;
       }
     } catch (e) {
-      console.log('Error fetching data', e);
+      console.debug('Error fetching data', e);
       this.onError(e);
     }
   };

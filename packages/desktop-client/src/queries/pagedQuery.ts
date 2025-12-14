@@ -87,6 +87,7 @@ export class PagedQuery<TResponse = unknown> extends LiveQuery<TResponse> {
 
       // If data is null, we haven't fetched anything yet so just
       // fetch the first page
+      console.debug('pagedQuery:run calling aqlQuery');
       return aqlQuery(
         this.query.limit(
           this.data == null
@@ -131,6 +132,7 @@ export class PagedQuery<TResponse = unknown> extends LiveQuery<TResponse> {
 
       const { field, order } = orderDesc;
 
+      console.debug('pagedQuery:refetchUpToRow calling aqlQuery');
       let result = await aqlQuery(this.query.filter({ id }).select(field));
       if (result.data.length === 0) {
         // This row is not part of this set anymore, we can't do
@@ -140,6 +142,7 @@ export class PagedQuery<TResponse = unknown> extends LiveQuery<TResponse> {
       }
       const fullRow = result.data[0];
 
+      console.debug('pagedQuery:refetchUpToRow calling aqlQuery again');
       result = await aqlQuery(
         this.query.filter({
           [field]: {
@@ -151,6 +154,7 @@ export class PagedQuery<TResponse = unknown> extends LiveQuery<TResponse> {
 
       // Load in an extra page to make room for the UI to show some
       // data after it
+      console.debug('pagedQuery:refetchUpToRow calling aqlQuery yet again');
       result = await aqlQuery(
         this.query
           .filter({
@@ -204,9 +208,11 @@ export class PagedQuery<TResponse = unknown> extends LiveQuery<TResponse> {
           this.updateData(currentData => currentData.concat(data));
 
           // Handle newly loaded page data
+	  console.debug(`${Number(performance.now()/1000).toFixed(9)} pagedQuery:_fetchNext: calling onPageData`);
           this.onPageData(data);
 
           // Handle entire data
+	  console.debug(`${Number(performance.now()/1000).toFixed(9)} pagedQuery:_fetchNext: calling onData`);
           this.onData(this.data, prevData);
         }
       }

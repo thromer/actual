@@ -40,6 +40,7 @@ class ReconstructedError extends Error {
 }
 
 function handleMessage(msg) {
+  console.debug(`${Number(performance.now()/1000).toFixed(9)} handleMessage type ${msg.type}`);
   if (msg.type === 'error') {
     // An error happened while handling a message so cleanup the
     // current reply handler. We don't care about the actual error -
@@ -157,6 +158,7 @@ export const send: T.Send = function (
   ...params: Parameters<T.Send>
 ): ReturnType<T.Send> {
   const [name, args, { catchErrors = false } = {}] = params;
+  console.debug(`${Number(performance.now()/1000).toFixed(9)} send ${name} ${JSON.stringify(args)}`);
   return new Promise((resolve, reject) => {
     const id = uuidv4();
 
