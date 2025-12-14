@@ -65,13 +65,14 @@ export function runQuery(
   params: (string | number)[] = [],
   fetchAll = false,
 ): unknown[] | { changes: unknown } {
+  const start = performance.now() / 1000;
   if (params) {
     verifyParamTypes(sql, params);
   }
 
   const stmt = typeof sql === 'string' ? db.prepare(sql) : sql;
-
-  if (fetchAll) {
+  try {
+   if (fetchAll) {
     try {
       stmt.bind(params);
       const rows = [];
@@ -90,13 +91,19 @@ export function runQuery(
       console.log(sql);
       throw e;
     }
-  } else {
+   } else {
     try {
       stmt.run(params);
       return { changes: db.getRowsModified() };
     } catch (e) {
       // console.log(sql);
       throw e;
+    }
+   }
+  } finally {
+    const latency = performance.now() / 1000 - start;
+    if (latency > 0.2) {
+      console.debug(`Slow query (${latency}s): ${sql}`);
     }
   }
 }
