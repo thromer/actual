@@ -604,14 +604,14 @@ export async function reconcileTransactions(
     await batchUpdateTransactions({ added, updated });
   }
 
-  logger.log('Debug data for the operations:', {
+  logger.log('Debug data for the operations:', JSON.stringify({
     transactionsStep1,
     transactionsStep2,
     transactionsStep3,
     added,
     updated,
     updatedPreview,
-  });
+  }));
 
   return {
     added: added.map(trans => trans.id),
