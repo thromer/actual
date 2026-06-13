@@ -117,6 +117,35 @@ export function registerTransactionsCommand(program: Command) {
       );
     });
 
+type BatchItem = { id: Parameters<typeof api.updateTransaction>[0] } &
+  Parameters<typeof api.updateTransaction>[1];
+
+transactions
+  .command('update-batch')
+  .description('Update multiple transactions in a batch')
+  .option('--data <json>', 'Array of {id, ...fieldsToUpdate} objects as JSON')
+  .option('--file <path>', 'Read the array from JSON file (use - for stdin)')
+  .action(async (cmdOpts) => {
+    const opts = program.opts();
+    await withConnection(
+      opts,
+      async () => {
+	const batch = readJsonInput(cmdOpts) as BatchItem[];
+        const results: Array<{ success: true; id: string } | { success: false; id: string; error: string }> = [];
+        for (const { id, ...fields } of batch) {
+          try {
+            await api.updateTransaction(id, fields);
+            results.push({ success: true, id });
+          } catch (err) {
+            results.push({ success: false, id, error: err instanceof Error ? err.message : String(err) });
+          }
+        }
+        printOutput(results, opts.format);
+      },
+      { mutates: true },
+    );
+  });
+
   transactions
     .command('delete <id>')
     .description('Delete a transaction')
