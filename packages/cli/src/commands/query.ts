@@ -138,6 +138,7 @@ function buildQueryFromFile(
   if (Array.isArray(parsed.groupBy)) {
     queryObj = queryObj.groupBy(parsed.groupBy);
   }
+  if (isRecord(parsed.options)) queryObj = queryObj.options(parsed.options);
   return queryObj;
 }
 
@@ -211,6 +212,10 @@ function buildQueryFromFlags(cmdOpts: Record<string, string | undefined>) {
 
   if (cmdOpts.groupBy) {
     queryObj = queryObj.groupBy(cmdOpts.groupBy.split(','));
+  }
+
+  if (cmdOpts.options) {
+    queryObj = queryObj.options(JSON.parse(cmdOpts.options));
   }
 
   return queryObj;
@@ -290,6 +295,10 @@ export function registerQueryCommand(program: Command) {
       'Show last N transactions (implies --table transactions, --order-by date:desc)',
     )
     .option('--count', 'Count matching rows instead of returning them')
+    .option(
+      '--options <json>',
+      'Options as JSON (e.g. \'{"splits":"grouped"}\')',
+    )
     .option(
       '--group-by <fields>',
       'Comma-separated fields to group by (use with aggregate selects)',
