@@ -50,7 +50,7 @@ export function registerServerCommand(program: Command) {
   server
     .command('bank-sync')
     .description('Run bank synchronization')
-    .option('--account <id>', 'Specific account ID to sync')
+    .option('--account <id>', 'Specific account ID to sync') // TODO THROMER ACCOUNT NAME
     .action(async cmdOpts => {
       const opts = program.opts();
       await withConnection(

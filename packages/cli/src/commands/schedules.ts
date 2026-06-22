@@ -46,7 +46,7 @@ export function registerSchedulesCommand(program: Command) {
     });
 
   schedules
-    .command('update <id>')
+    .command('update <id>') // TODO THROMER SCHEDULE NAME  // TODO THROMER BUG UPSERT
     .description('Update a schedule')
     .option('--data <json>', 'Fields to update as JSON')
     .option('--file <path>', 'Read fields from JSON file (use - for stdin)')
@@ -67,7 +67,7 @@ export function registerSchedulesCommand(program: Command) {
     });
 
   schedules
-    .command('delete <id>')
+    .command('delete <id>') // TODO THROMER SCHEDULE NAME  // TODO THROMER SILENTLY SUCCEEDS IF DOESN'T EXIST
     .description('Delete a schedule')
     .action(async (id: string) => {
       const opts = program.opts();

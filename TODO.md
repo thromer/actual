@@ -1,7 +1,9 @@
-- had better check outstanding FRs!
-- account id or name for some/all commands. prefer id for the corner case where the name matches uuid regex and it turns out to be ambigous
-- multiple accounts on some commands e.g. transactions list, `*` for all accounts. probably query suffices? yes for my use case since i just want `*` or one
-- already proposed in this branch in my fork (not documented): batch update
+- DONE [no docs or tests] batch update
+- DONE [no docs or tests] query: let me see parents! need to pass through options with flag or json.
+- account id or name for some/all commands, prefer id for the corner case where the name matches uuid regex and it turns out to be ambigous; fail if not unique
+- and same for category, category group, payee, schedule, tag
 - dry run option for mutations
+- accounts balance <id> should fail not happily return 0 for non-existent account
+- tags update <id> and similar should not upsert if tag does not exist (and should not accept a non-uuid format tag if it does!!!)
 - FYI my use case is ~/bin/actual-remove-tag.py
-- query: let me see parents! need to pass through options with flag or json.
+- LOW multiple accounts on some commands e.g. transactions list, `*` for all accounts. probably query suffices? yes for my use case since i just want `*` or one

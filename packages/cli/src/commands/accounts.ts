@@ -3,6 +3,7 @@ import type { Command } from 'commander';
 
 import { withConnection } from '#connection';
 import { printOutput } from '#output';
+import { resolveAccountId } from '#resolve-id';
 import { parseBoolFlag, parseIntFlag } from '#utils';
 
 export function registerAccountsCommand(program: Command) {
@@ -67,7 +68,7 @@ export function registerAccountsCommand(program: Command) {
     });
 
   accounts
-    .command('update <id>')
+    .command('update <id>') // TODO THROMER BUG UPSERT
     .description('Update an account')
     .option('--name <name>', 'New account name')
     .option('--offbudget <bool>', 'Set off-budget status')
@@ -89,11 +90,15 @@ export function registerAccountsCommand(program: Command) {
           'No update fields provided. Use --name or --offbudget.',
         );
       }
+
       await withConnection(
         opts,
         async () => {
           await api.updateAccount(id, fields);
-          printOutput({ success: true, id }, opts.format);
+          printOutput(
+            { success: true, id: await resolveAccountId(id) },
+            opts.format,
+          );
         },
         { mutates: true },
       );
@@ -107,7 +112,7 @@ export function registerAccountsCommand(program: Command) {
       'Transfer remaining balance to this account',
     )
     .option(
-      '--transfer-category <id>',
+      '--transfer-category <id>', // TODO THROMER CATEGORY NAME
       'Transfer remaining balance to this category',
     )
     .action(async (id: string, cmdOpts) => {
@@ -115,12 +120,13 @@ export function registerAccountsCommand(program: Command) {
       await withConnection(
         opts,
         async () => {
+          const resolvedId = await resolveAccountId(id);
           await api.closeAccount(
-            id,
-            cmdOpts.transferAccount,
+            resolvedId,
+            await resolveAccountId(cmdOpts.transferAccount),
             cmdOpts.transferCategory,
           );
-          printOutput({ success: true, id }, opts.format);
+          printOutput({ success: true, id: resolvedId }, opts.format);
         },
         { mutates: true },
       );
@@ -134,23 +140,25 @@ export function registerAccountsCommand(program: Command) {
       await withConnection(
         opts,
         async () => {
-          await api.reopenAccount(id);
-          printOutput({ success: true, id }, opts.format);
+          const resolvedId = await resolveAccountId(id);
+          await api.reopenAccount(resolvedId);
+          printOutput({ success: true, id: resolvedId }, opts.format);
         },
         { mutates: true },
       );
     });
 
   accounts
-    .command('delete <id>')
+    .command('delete <id>') // TODO THROMER SILENTLY SUCCEEDS IF DOESN'T EXIST
     .description('Delete an account')
     .action(async (id: string) => {
       const opts = program.opts();
       await withConnection(
         opts,
         async () => {
-          await api.deleteAccount(id);
-          printOutput({ success: true, id }, opts.format);
+          const resolvedId = await resolveAccountId(id);
+          await api.deleteAccount(resolvedId);
+          printOutput({ success: true, id: resolvedId }, opts.format);
         },
         { mutates: true },
       );
@@ -175,8 +183,9 @@ export function registerAccountsCommand(program: Command) {
       await withConnection(
         opts,
         async () => {
-          const balance = await api.getAccountBalance(id, cutoff);
-          printOutput({ id, balance }, opts.format);
+          const resolvedId = await resolveAccountId(id);
+          const balance = await api.getAccountBalance(resolvedId, cutoff);
+          printOutput({ id: resolvedId, balance }, opts.format);
         },
         { mutates: false },
       );

@@ -39,7 +39,7 @@
     "build:desktop": "./bin/package-electron",
     "build:plugins-service": "yarn workspace plugins-service build",
     "build:api": "yarn build --scope=@actual-app/api",
-    "build:cli": "yarn build --scope=@actual-app/cli",
+    "build:cli": "yarn build --scope=@actual-app/cli && chmod a+x packages/cli/dist/cli.js",
     "build:docs": "yarn workspace docs build",
     "build:storybook": "yarn workspace @actual-app/components build:storybook",
     "deploy:docs": "yarn workspace docs deploy",

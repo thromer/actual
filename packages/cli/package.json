@@ -24,6 +24,7 @@
     "#input": "./src/input.ts",
     "#lock": "./src/lock.ts",
     "#output": "./src/output.ts",
+    "#resolve-id": "./src/resolve-id.ts",
     "#utils": "./src/utils.ts"
   },
   "scripts": {

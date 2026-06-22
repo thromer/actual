@@ -45,7 +45,7 @@ export function registerTagsCommand(program: Command) {
     });
 
   tags
-    .command('update <id>')
+    .command('update <id>') // TODO THROMER TAG NAME  // TODO THROMER BUG UPSERT
     .description('Update a tag')
     .option('--tag <tag>', 'New tag name')
     .option('--color <color>', 'New tag color')
@@ -74,14 +74,15 @@ export function registerTagsCommand(program: Command) {
     });
 
   tags
-    .command('delete <id>')
+    .command('delete <id>') // TODO THROMER TAG NAME  // TODO THROMER SILENTLY SUCCEEDS IF DOESN'T EXIST
     .description('Delete a tag')
     .action(async (id: string) => {
       const opts = program.opts();
       await withConnection(
         opts,
         async () => {
-          await api.deleteTag(id);
+          const result = await api.deleteTag(id);
+          console.log(`deleteTag result=${JSON.stringify(result, null, 2)}`);
           printOutput({ success: true, id }, opts.format);
         },
         { mutates: true },

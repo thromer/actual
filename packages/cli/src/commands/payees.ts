@@ -54,7 +54,7 @@ export function registerPayeesCommand(program: Command) {
     });
 
   payees
-    .command('update <id>')
+    .command('update <id>') // TODO THROMER PAYEE NAME  // TODO THROMER BUG UPSERT
     .description('Update a payee')
     .option('--name <name>', 'New payee name')
     .action(async (id: string, cmdOpts) => {
@@ -77,7 +77,7 @@ export function registerPayeesCommand(program: Command) {
     });
 
   payees
-    .command('delete <id>')
+    .command('delete <id>') // TODO THROMER PAYEE NAME  // TODO THROMER SILENTLY SUCCEEDS IF DOESN'T EXIST
     .description('Delete a payee')
     .action(async (id: string) => {
       const opts = program.opts();
@@ -94,7 +94,7 @@ export function registerPayeesCommand(program: Command) {
   payees
     .command('merge')
     .description('Merge payees into a target payee')
-    .requiredOption('--target <id>', 'Target payee ID')
+    .requiredOption('--target <id>', 'Target payee ID') // TODO THROMER PAYEE NAME
     .requiredOption('--ids <ids>', 'Comma-separated payee IDs to merge')
     .action(async (cmdOpts: { target: string; ids: string }) => {
       const mergeIds = cmdOpts.ids

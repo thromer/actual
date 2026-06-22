@@ -61,7 +61,7 @@ export function registerRulesCommand(program: Command) {
     });
 
   rules
-    .command('update')
+    .command('update') // TODO THROMER BUG UPSERT
     .description('Update a rule')
     .option('--data <json>', 'Rule data as JSON (must include id)')
     .option('--file <path>', 'Read rule from JSON file (use - for stdin)')
@@ -81,7 +81,7 @@ export function registerRulesCommand(program: Command) {
     });
 
   rules
-    .command('delete <id>')
+    .command('delete <id>') // TODO THROMER SILENTLY SUCCEEDS IF DOESN'T EXIST
     .description('Delete a rule')
     .action(async (id: string) => {
       const opts = program.opts();

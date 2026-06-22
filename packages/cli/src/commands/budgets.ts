@@ -77,7 +77,7 @@ export function registerBudgetsCommand(program: Command) {
     .command('set-amount')
     .description('Set budget amount for a category in a month')
     .requiredOption('--month <month>', 'Budget month (YYYY-MM)')
-    .requiredOption('--category <id>', 'Category ID')
+    .requiredOption('--category <id>', 'Category ID') // TODO THROMER CATEGORY NAME
     .requiredOption(
       '--amount <amount>',
       'Amount in cents (e.g. 50000 = 500.00)',
@@ -99,7 +99,7 @@ export function registerBudgetsCommand(program: Command) {
     .command('set-carryover')
     .description('Enable/disable carryover for a category')
     .requiredOption('--month <month>', 'Budget month (YYYY-MM)')
-    .requiredOption('--category <id>', 'Category ID')
+    .requiredOption('--category <id>', 'Category ID') // TODO THROMER CATEGORY NAME
     .requiredOption('--flag <bool>', 'Enable (true) or disable (false)')
     .action(async cmdOpts => {
       const flag = parseBoolFlag(cmdOpts.flag, '--flag');

@@ -50,7 +50,7 @@ export function registerCategoryGroupsCommand(program: Command) {
     });
 
   groups
-    .command('update <id>')
+    .command('update <id>') // TODO THROMER CATEGORY NAME  // TODO THROMER BUG UPSERT
     .description('Update a category group')
     .option('--name <name>', 'New group name')
     .option('--hidden <bool>', 'Set hidden status')
@@ -75,9 +75,9 @@ export function registerCategoryGroupsCommand(program: Command) {
     });
 
   groups
-    .command('delete <id>')
+    .command('delete <id>') // TODO THROMER CATEGORY NAME  // TODO THROMER SILENTLY SUCCEEDS IF DOESN'T EXIST
     .description('Delete a category group')
-    .option('--transfer-to <id>', 'Transfer transactions to this category ID')
+    .option('--transfer-to <id>', 'Transfer transactions to this category ID') // TODO THROMER CATEGORY NAME
     .action(async (id: string, cmdOpts) => {
       const opts = program.opts();
       await withConnection(

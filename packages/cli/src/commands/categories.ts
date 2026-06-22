@@ -32,7 +32,7 @@ export function registerCategoriesCommand(program: Command) {
     .command('create')
     .description('Create a new category')
     .requiredOption('--name <name>', 'Category name')
-    .requiredOption('--group-id <id>', 'Category group ID')
+    .requiredOption('--group-id <id>', 'Category group ID') // TODO THROMER CATEGORY GROUP NAME
     .option('--is-income', 'Mark as income category', false)
     .action(async cmdOpts => {
       const opts = program.opts();
@@ -52,7 +52,7 @@ export function registerCategoriesCommand(program: Command) {
     });
 
   categories
-    .command('update <id>')
+    .command('update <id>') // TODO THROMER CATEGORY NAME   // TODO THROMER BUG UPSERT
     .description('Update a category')
     .option('--name <name>', 'New category name')
     .option('--hidden <bool>', 'Set hidden status')
@@ -77,9 +77,9 @@ export function registerCategoriesCommand(program: Command) {
     });
 
   categories
-    .command('delete <id>')
+    .command('delete <id>') // TODO THROMER CATEGORY NAME    // TODO THROMER SILENTLY SUCCEEDS IF DOESN'T EXIST
     .description('Delete a category')
-    .option('--transfer-to <id>', 'Transfer transactions to this category')
+    .option('--transfer-to <id>', 'Transfer transactions to this category') // TODO THROMER CATEGORY NAME
     .action(async (id: string, cmdOpts) => {
       const opts = program.opts();
       await withConnection(

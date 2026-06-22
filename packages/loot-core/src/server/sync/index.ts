@@ -79,7 +79,9 @@ export function checkSyncingMode(mode: SyncingMode): boolean {
 
 function apply(msg: Message, prev?: boolean) {
   const { dataset, row, column, value } = msg;
-
+  logger.log(
+    `apply msg=${JSON.stringify(msg)} prev=${prev === undefined ? 'undefined' : JSON.stringify(prev)})`,
+  );
   if (dataset === 'prefs') {
     // Do nothing, it doesn't exist in the db
   } else {
@@ -339,6 +341,7 @@ export const applyMessages = sequential(async (messages: Message[]) => {
     const added = new Set();
 
     for (const msg of messages) {
+      logger.log(`applyMessages: msg=${JSON.stringify(msg)}`);
       const { dataset, row, column, timestamp, value } = msg;
 
       if (!msg.old) {

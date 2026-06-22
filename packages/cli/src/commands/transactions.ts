@@ -4,6 +4,7 @@ import type { Command } from 'commander';
 import { withConnection } from '#connection';
 import { readJsonInput } from '#input';
 import { printOutput } from '#output';
+import { resolveAccountId } from '#resolve-id';
 
 export function registerTransactionsCommand(program: Command) {
   const transactions = program
@@ -22,7 +23,7 @@ export function registerTransactionsCommand(program: Command) {
         opts,
         async () => {
           const result = await api.getTransactions(
-            cmdOpts.account,
+            await resolveAccountId(cmdOpts.account),
             cmdOpts.start,
             cmdOpts.end,
           );
@@ -52,7 +53,7 @@ export function registerTransactionsCommand(program: Command) {
             typeof api.addTransactions
           >[1];
           const result = await api.addTransactions(
-            cmdOpts.account,
+            await resolveAccountId(cmdOpts.account),
             transactions,
             {
               learnCategories: cmdOpts.learnCategories,
@@ -84,7 +85,7 @@ export function registerTransactionsCommand(program: Command) {
             typeof api.importTransactions
           >[1];
           const result = await api.importTransactions(
-            cmdOpts.account,
+            await resolveAccountId(cmdOpts.account),
             transactions,
             {
               defaultCleared: true,
@@ -98,7 +99,7 @@ export function registerTransactionsCommand(program: Command) {
     });
 
   transactions
-    .command('update <id>')
+    .command('update <id>') // TODO THROMER BUG SILENT SUCCESS WHEN ID DOES NOT EXIST
     .description('Update a transaction')
     .option('--data <json>', 'Fields to update as JSON')
     .option('--file <path>', 'Read fields from JSON file (use - for stdin)')
@@ -122,7 +123,7 @@ export function registerTransactionsCommand(program: Command) {
   } & Parameters<typeof api.updateTransaction>[1];
 
   transactions
-    .command('update-batch')
+    .command('update-batch') // TODO THROMER BUG SILENT SUCCESS WHEN ID DOES NOT EXIST
     .description('Update multiple transactions in a batch')
     .option('--data <json>', 'Array of {id, ...fieldsToUpdate} objects as JSON')
     .option('--file <path>', 'Read the array from JSON file (use - for stdin)')
