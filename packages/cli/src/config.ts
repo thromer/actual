@@ -109,6 +109,14 @@ function validateConfigFileContent(value: unknown): ConfigFileContent {
 
 async function loadConfigFile(): Promise<ConfigFileContent> {
   const explorer = cosmiconfig('actual', {
+    // cosmiconfig keys its search cache by directory path alone, ignoring
+    // whether the directory is being visited as the global config dir. When the
+    // cwd is inside the global config dir (~/.config/actual), the global lookup
+    // therefore collides with the still-pending cache entry for the cwd, and
+    // the returned promise ends up awaiting itself — search() never settles and
+    // the CLI exits without doing anything. We search exactly once per process,
+    // so the cache gains us nothing.
+    cache: false,
     searchStrategy: 'global',
     searchPlaces: [
       'package.json',
