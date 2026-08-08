@@ -706,9 +706,15 @@ Add to `ApiHandlers` (existing style at lines 36-60):
               | { returnUrl: string; loginMethod: 'openid' })
               => Promise<{ token?: string; redirectUrl?: string }>;
 'api/sign-out': () => Promise<void>;
+'api/set-token': (arg: { token: string }) => Promise<void>;
 'api/get-session-token': () => Promise<string | null>;
 'api/get-user': () => Promise<Awaited<ReturnType<AuthHandlers['subscribe-get-user']>>>;
 ```
+
+`api/set-token` is the OIDC-callback injection path. It was previously filed as
+the one unavoidable raw `send` (Part 5A); `packages/cli`'s `login --openid` —
+which must set the token, then `getUser()` to validate it before printing —
+is the reason to promote it to a real method. See Part 8.
 
 ### 2. `packages/loot-core/src/server/api.ts`
 
@@ -780,6 +786,12 @@ branches. Worth a comment noting that this mode relies on a previously stored
 `user-token`, and that it is only durable where asyncStorage persists (browser
 build: yes; Node build: no, `persist: false`).
 
+**This item is required, not optional.** An earlier draft rated it weak and
+indirect. `packages/cli`'s `login --openid` (Part 8) cannot init with credentials
+it does not yet have, so credential-free init is a hard prerequisite for minting
+a token at all — in Node, where the "no stored token to use" objection would
+otherwise apply.
+
 ### 4. `packages/api/methods.ts`
 
 Thin one-liners in the existing style (`methods.ts:37-47`):
@@ -790,6 +802,9 @@ export async function signIn(loginInfo) {
 }
 export async function signOut() {
   return send('api/sign-out');
+}
+export async function setToken(token: string) {
+  return send('api/set-token', { token });
 }
 export async function getSessionToken() {
   return send('api/get-session-token');
@@ -863,8 +878,13 @@ all**.
 
 ### Upstream justification — who else benefits
 
-The PR should be argued on general grounds, not on "a Chrome extension needs
-this". Honest strength assessment per item:
+**Lead with `packages/cli` (Part 8).** It ships `sessionToken` in its config,
+env var and CLI flag (`config.ts:11,26,40`, `connection.ts:47-53`) and **nothing
+in the monorepo can mint one**. That is a first-party, in-repo, half-built
+feature — cheap for a reviewer to verify and hard to dispute. The browser demo
+and the extension are corroborating evidence, not the argument.
+
+Honest strength assessment per item, with that framing:
 
 | Item                                           | General benefit                                                                                                                                                                                                                                                                                                                 | Strength                                                          |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
@@ -874,10 +894,11 @@ this". Honest strength assessment per item:
 | `getLoginMethods()` / `needsBootstrap()`       | Anything connecting to an arbitrary server (CLI, setup tool) needs to know whether it is bootstrapped and what auth it accepts.                                                                                                                                                                                                 | Moderate                                                          |
 | `closeBudget()`                                | Narrower than it first looks: `api.loadBudget(otherId)` already closes the current budget (`budgetfiles/app.ts:227-243`), so switching does not need it. Real use is "stop working on this budget but keep the process" — releasing the spreadsheet and services without paying re-init.                                        | Weak-moderate                                                     |
 | `signOut()`                                    | Near-no-op for Node (`persist: false` — process exit already discards the token). Matters for the browser build, where asyncStorage is IndexedDB-backed. Justify on those terms.                                                                                                                                                | Weak for Node, real for browser                                   |
-| `StoredAuthConfig` (`init({ serverURL })`)     | On its own looks pointless in Node, since no token is ever stored. Its real justification: the current union forces credentials to exist _at init time_, which is wrong for any interactive consumer where the user supplies a password after start-up. Precondition for sign-in-after-init.                                    | Indirect — present it as such                                     |
+| `StoredAuthConfig` (`init({ serverURL })`)     | **Required, not indirect.** `packages/cli`'s `login --openid` must boot the engine before any credential exists in order to mint one at all (Part 8). Also right for any interactive consumer where the user supplies a password after start-up.                                                                                | **Strong** — blocks `actual login` otherwise                      |
+| `setToken()`                                   | The OIDC callback path: whoever receives the redirect must inject the token. `packages/cli` additionally needs it to `getUser()`-validate a freshly minted token before printing it. Previously the one unavoidable raw `send`.                                                                                                 | Moderate — required for any OIDC consumer                         |
 
-**Do not oversell `closeBudget`, `signOut` or `StoredAuthConfig`.** Leading with
-the two strong items and presenting the rest as completing the same surface is a
+**Do not oversell `closeBudget` or `signOut`.** Leading with the CLI, then the
+two strong items, and presenting the rest as completing the same surface is a
 better shape than a flat list of seven additions.
 
 ### The Task 3 allow-list is also not extension-specific
@@ -919,7 +940,7 @@ should just be explicit and contained.
 | Tag                           | Needed for                           | Task |
 | ----------------------------- | ------------------------------------ | ---- |
 | `subscribe-sign-in`           | password login; OIDC initiation      | 1, 3 |
-| `subscribe-set-token`         | inject an OIDC / stored token        | 1, 3 |
+| `subscribe-set-token`         | inject an OIDC / stored token        | 1, 3 | ← promoted to `api.setToken()` by the PR (Part 8) |
 | `subscribe-get-user`          | validate token, read `tokenExpired`  | 1    |
 | `subscribe-sign-out`          | logout                               | 1    |
 | `subscribe-needs-bootstrap`   | server reachable? bootstrapped?      | 1    |
@@ -936,8 +957,9 @@ it converts the top four into supported `api.signIn` / `api.setToken` /
 - `api.getLoginMethods()` / `api.needsBootstrap()` — cheap, and they complete the
   "connect to an arbitrary server" story.
 
-That would leave `subscribe-set-token` (unavoidable for the OIDC callback) as the
-only raw tag in the auth path.
+With `api/set-token` added to the spec (Part 4 §1, at `packages/cli`'s
+prompting), **no raw tag remains in the auth path at all** — `close-budget` is
+then the only raw `send` left, and Part 4 covers that too.
 
 ### B. Uses raw `send` where an `api.*` exists — don't
 
@@ -1215,7 +1237,7 @@ in the current PoC would get copied.
 | `init({ serverURL })` (`StoredAuthConfig`)                         | Boot the engine before any credential exists — the precondition for signing in from the options page rather than at init time.                                 |
 | `signIn({ password })` → `{ token }`                               | Password entered once; token stored; **password never persisted**. Replaces `background.ts:41-43`.                                                             |
 | `signIn({ returnUrl, loginMethod: 'openid' })` → `{ redirectUrl }` | OIDC via `chrome.identity.launchWebAuthFlow`, or the Task 3 path-discriminator workaround against an unmodified server.                                        |
-| `subscribe-set-token` (raw — unavoidable)                          | Consuming the token from the OIDC callback. The one raw tag a reference must still show, so document _why_ (Part 5A).                                          |
+| `setToken()`                                                       | Consuming the token from the OIDC callback. Now a supported method (Part 4 §1) rather than a raw tag.                                                          |
 | `init({ serverURL, sessionToken })`                                | Every offscreen boot after the first, including after Chrome reclaims the document.                                                                            |
 | `getUser()`                                                        | Popup header: who is signed in, their permission, and `tokenExpired` → prompt to re-auth.                                                                      |
 | `getSessionToken()`                                                | Recovering the token after an `init({ password })` path, and rendering signed-in state without a round trip.                                                   |
@@ -1283,6 +1305,133 @@ carries the same surface plus the extension-only material above — offscreen
 lifetime, `chrome.storage` token custody, manifest configuration, and the
 auth-proxy redirect flow. Write the shared narrative once and adapt it, but do
 not ration coverage between them.
+
+---
+
+## Part 8 — `packages/cli`: the strongest case for the PR
+
+### The CLI already has the hole this PR fills
+
+`packages/cli` ships `sessionToken` support **today**: `--session-token`,
+`ACTUAL_SESSION_TOKEN`, and a `sessionToken` key in `.actualrc` /
+`actual.config.json` (`config.ts:11,26,40,155-158`), consumed at
+`connection.ts:47-53`:
+
+```ts
+if (config.sessionToken) {
+  await api.init({
+    serverURL,
+    dataDir,
+    sessionToken: config.sessionToken,
+    verbose,
+  });
+} else if (config.password) {
+  await api.init({ serverURL, dataDir, password: config.password, verbose });
+}
+```
+
+**Nothing in the monorepo can produce that token.** A CLI user's only options are
+`--password` or obtaining one out of band — reading it from the web app's
+IndexedDB, or hand-rolling `POST /account/login`.
+
+This reframes the whole PR: not "add methods for third-party embedders", but
+"a first-party, in-repo CLI documents a config field it cannot populate". Lead
+the PR with this. It is the cheapest argument to verify and the hardest to
+dispute.
+
+### `actual login` — password
+
+Works with `getSessionToken()` alone, no other change:
+
+```ts
+await api.init({ serverURL, password }); // legal today
+const token = await api.getSessionToken();
+```
+
+The nicer shape — `init({ serverURL })` then `signIn({ password })`, so the
+password never reaches `init` — needs `StoredAuthConfig` (Part 4 §3).
+
+### `actual login --openid` — and the CLI is better placed than the extension
+
+Because it can bind a socket. `isValidRedirectUrl` (`openid.ts:370-373`) accepts
+any `returnUrl` whose hostname is literally `localhost` — the carve-out that
+exists for Electron's loopback server (`desktop-electron/index.ts:93-134`). So:
+
+```
+1. api.init({ serverURL })                        // ← needs StoredAuthConfig
+2. listen on http://localhost:<port>
+3. { redirectUrl } = api.signIn({ returnUrl: `http://localhost:${port}`,
+                                  loginMethod: 'openid' })
+4. open the browser at redirectUrl
+5. loopback receives GET /openid-cb?token=…
+6. api.setToken({ token }); api.getUser()         // validate before printing
+7. print the token (or write it to a chosen config file)
+```
+
+**No sync-server change required** — Task 3's allow-list is an extension /
+split-origin concern, not a CLI one.
+
+Gotchas:
+
+- The hostname test is a literal string compare: `localhost` works,
+  **`127.0.0.1` does not**.
+- The server appends `/openid-cb` to your `returnUrl` (`openid.ts:336`), so the
+  loopback must route that path.
+- The pending request expires after 300 s (`openid.ts:156`).
+- **Headless / SSH is the real limitation.** The browser is on the operator's
+  laptop; the loopback is on the remote host. Actual has no device-code flow, so
+  this needs SSH port-forwarding or a paste-the-callback-URL fallback.
+
+### What this adds to the Part 4 spec
+
+- **`setToken` becomes a real method** (see §1/§4). Step 6 above needs it to
+  validate before printing; without it the CLI can only emit an unverified token.
+  It was previously filed as "the one unavoidable raw `send`" — the CLI is the
+  reason to promote it.
+- **`StoredAuthConfig` moves from weak/indirect to required.** The OIDC path
+  cannot init with credentials it does not yet have.
+
+### Token lifetime — corrected
+
+An earlier draft of this document claimed OIDC-minted tokens **default to 10
+minutes**, and treated that as a reason "paste the token into your config" would
+silently rot. **That was wrong.** `load-config.js:258-263` sets
+`default: 'never'`, and the `tokenExpiration` format (`:38-56`) coerces to
+exactly `'never' | 'openid-provider' | number`, throwing otherwise — so the
+`else` branch at `openid.ts:325-327` (comment: "Default to 10 minutes") is
+**unreachable**. OIDC and password tokens both default to
+`TOKEN_EXPIRATION_NEVER`, matching
+[the docs](https://actualbudget.org/docs/config/oauth-auth/). A token pasted into
+a CLI config keeps working.
+
+### A real, separate, low-traffic bug: `token_expiration` units
+
+Reachable only when an operator sets a **numeric** value, which is presumably why
+it has gone unnoticed:
+
+| Path     | Code                                                                | Effective unit |
+| -------- | ------------------------------------------------------------------- | -------------- |
+| OpenID   | `openid.ts:323-324` — `now + config.get('token_expiration')`        | seconds        |
+| Password | `password.js:133-135` — `now + config.get('token_expiration') * 60` | minutes        |
+
+`packages/docs/docs/config/oauth-auth.md:179` documents "A numeric value in
+seconds (e.g., `3600` for 1 hour)". So **the password path is the wrong one** —
+`ACTUAL_TOKEN_EXPIRATION=3600` yields 1-hour OIDC sessions and 60-hour password
+sessions. Worth its own small PR (or an issue), unrelated to everything else
+here; do not bundle it.
+
+### Password tokens are shared, not per-client
+
+Correcting a claim made earlier in this document: storing a session token instead
+of a password was described as gaining "revocability". That is **overstated for
+password auth**. `password.js:98-103` looks up a single `sessions` row for
+`auth_method = 'password'` and reuses its token, so every password login — CLI,
+web, extension — returns the _same_ token, with no per-client granularity.
+
+It is accurate for OIDC, where each login mints a fresh uuid
+(`openid.ts:315`). The honest claim for password auth is narrower: **you avoid
+persisting the password itself**, not that you gain revocability. Any UI or docs
+copy in Parts 6–7 must say it that way.
 
 ---
 
