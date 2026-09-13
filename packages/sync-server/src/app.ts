@@ -190,7 +190,7 @@ function sendServerStartedMessage() {
   // @ts-ignore-error electron types
   process.parentPort?.postMessage({ type: 'server-started' });
   console.log(
-    'Listening on ' + config.get('hostname') + ':' + config.get('port') + '...',
+    'THROMER 1 Listening on ' + config.get('hostname') + ':' + config.get('port') + '...',
   );
 }
 

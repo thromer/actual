@@ -32,19 +32,23 @@ app.post(
 app.post(
   '/accounts',
   handleError(async (req, res) => {
+    console.log('THROMER looking access Key')
     let accessKey = secretsService.get(SecretName.simplefin_accessKey);
 
     if (isInvalidAccessKey(accessKey)) {
+      console.log('THROMER looking for simpelfin_token')
       const token = secretsService.get(SecretName.simplefin_token);
       if (token == null || isForbidden(token)) {
+        console.log(`THROMER token '${token}' is null or forbidden`);
         invalidToken(res);
         return;
       }
 
+      console.log('THROMER decoding claim url')
       const claimUrl = decodeClaimUrl(token);
       if (claimUrl == null) {
         console.log(
-          'SimpleFIN setup token does not decode to a claim URL - re-enter the token',
+          'THROMER SimpleFIN setup token does not decode to a claim URL - re-enter the token',
         );
         invalidToken(res);
         return;
@@ -57,6 +61,7 @@ app.post(
         serverDown(e, res);
         return;
       }
+      console.log(`THROMER received accessKey '${accessKey}'`);
 
       if (isInvalidAccessKey(accessKey)) {
         console.log(
@@ -67,7 +72,7 @@ app.post(
         invalidToken(res);
         return;
       }
-
+      console.log(`THROMER have supposedly good accessKey '${accessKey}'`);
       secretsService.set(SecretName.simplefin_accessKey, accessKey);
     }
 
@@ -332,15 +337,22 @@ function parseAccessKey(accessKey) {
   };
 }
 
+// TODO NO xyz#?Z37 ugh!?!?:3
+// TODO wait this compiles uh oh
+
 function decodeClaimUrl(base64Token) {
+  console.log(`THROMER decoding token '${base64Token}'`);
   const decoded = Buffer.from(base64Token, 'base64').toString();
+  console.log(`THROMER decoded token is '${decoded}'`);
 
   let url;
   try {
     url = new URL(decoded);
   } catch {
+    console.log(`THROMER failed to turn into a URL'`);
     return null;
   }
+  console.log(`THROMER claim protocol='${url.protocol}' hostname='${url.hostname}' href='${url.href}'`);
 
   if (url.protocol !== 'https:' && url.protocol !== 'http:') {
     return null;
@@ -350,16 +362,19 @@ function decodeClaimUrl(base64Token) {
 }
 
 async function claimAccessKey(claimUrl) {
+  console.log(`THROMER in claimAccessKey '${claimUrl}'  trying asertUrlAllowed`);
   // Self-hosters may run their own SimpleFIN bridge on the local network, so
   // private addresses are allowed here; cloud metadata and other always-blocked
   // ranges are still rejected.
   await assertUrlAllowed(claimUrl, { allowPrivateNetwork: true });
 
+  console.log('THROMER passed assertUrlAllowed; fetching claimUrl');
   // don't auto-follow redirects for SSRF safety
   const response = await fetch(claimUrl, {
     method: 'POST',
     redirect: 'manual',
   });
+  console.log(`THROMER POST to claimUrl result: ok=${response.ok} status=${response.status}`);
 
   if (!response.ok && response.status !== 403) {
     throw new Error(`SimpleFIN claim failed with HTTP ${response.status}`);
