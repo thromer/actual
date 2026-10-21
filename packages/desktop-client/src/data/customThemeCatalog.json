@@ -205,7 +205,7 @@
       "#E5E7EB",
       "#1B8366"
     ],
-    "mode": "dark"
+    "mode": "light"
   },
   {
     "name": "High-contrast (Light)",
@@ -277,10 +277,10 @@
     "colors": [
       "#fbf1c7",
       "#3c3836",
-      "#d65d0e",
-      "#cc241d",
-      "#98971a",
-      "#458588"
+      "#af3a03",
+      "#9d0006",
+      "#645f1c",
+      "#076678"
     ],
     "mode": "light"
   },
@@ -291,9 +291,9 @@
       "#282828",
       "#ebdbb2",
       "#fabd2f",
-      "#fb4934",
+      "#fb8467",
       "#b8bb26",
-      "#83a598"
+      "#93ada0"
     ],
     "mode": "dark"
   },
@@ -385,6 +385,32 @@
       "#f43f5e",
       "#00e676",
       "#ffffff"
+    ],
+    "mode": "dark"
+  },
+  {
+    "name": "Palenight",
+    "repo": "mafsi/palenight-actual",
+    "colors": [
+      "#292d3e",
+      "#31364a",
+      "#697098",
+      "#c792ea",
+      "#82aaff",
+      "#c3e88d"
+    ],
+    "mode": "dark"
+  },
+  {
+    "name": "Karma",
+    "repo": "sreetamdas/karma",
+    "colors": [
+      "#0a0e14",
+      "#af98e6",
+      "#7bd88f",
+      "#fc618d",
+      "#fd9353",
+      "#5ad4e6"
     ],
     "mode": "dark"
   }

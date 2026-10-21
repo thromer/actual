@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
+import { AccountPage } from './page-models/account-page';
 import { ConfigurationPage } from './page-models/configuration-page';
 import type { CustomReportPage } from './page-models/custom-report-page';
 import { Navigation } from './page-models/navigation';
@@ -47,6 +48,27 @@ test.describe('Reports', () => {
     await expect(page).toMatchThemeScreenshots();
   });
 
+  test('resizes number cards with the viewport', async () => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    const number = page.locator('[aria-label*="amount:"]').first();
+    await expect(number).toBeVisible();
+    const numberText = number.locator('span').first();
+    const initialFontSize = await numberText.evaluate(
+      element => getComputedStyle(element).fontSize,
+    );
+    await expect(number).toMatchThemeScreenshots();
+
+    await page.setViewportSize({ width: 900, height: 900 });
+    await expect(number).toMatchThemeScreenshots();
+
+    await expect
+      .poll(() =>
+        numberText.evaluate(element => getComputedStyle(element).fontSize),
+      )
+      .not.toBe(initialFontSize);
+  });
+
   test('right clicking a report card opens context menu', async () => {
     await reportsPage.rightClickReportCard('Net Worth');
     const menu = page.getByRole('menu');
@@ -88,12 +110,26 @@ test.describe('Reports', () => {
     });
 
     test('loads balance forecast report with monthly granularity', async () => {
+      // monthly granularity, auto y axis
       await expect(page).toMatchThemeScreenshots();
     });
 
     test('switches to daily granularity', async () => {
+      // daily granularity, auto y-axis
       await reportsPage.selectForecastGranularity('Daily');
+      await expect(page).toMatchThemeScreenshots();
+    });
 
+    test('switches to Zero-Based Y-Axis', async () => {
+      // monthly granularity, zero-based y-axis
+      await reportsPage.selectYAxisBase('Zero-Based');
+      await expect(page).toMatchThemeScreenshots();
+    });
+
+    test('switches to daily granularity and Zero-Based Y-Axis', async () => {
+      // daily granularity, zero-based y-axis
+      await reportsPage.selectForecastGranularity('Daily');
+      await reportsPage.selectYAxisBase('Zero-Based');
       await expect(page).toMatchThemeScreenshots();
     });
 
@@ -126,6 +162,139 @@ test.describe('Reports', () => {
       await page.addStyleTag({
         content: '[role="tooltip"] { display: none !important; }',
       });
+    });
+
+    test('splits transactions into exact tag buckets and scopes them', async () => {
+      test.setTimeout(90_000);
+      const settingsPage = await navigation.goToSettingsPage();
+      await settingsPage.goToSection('Tags');
+      await page.getByRole('button', { name: 'Add New', exact: true }).click();
+      for (const tag of ['red', 'circle']) {
+        await page.getByPlaceholder('New tag', { exact: true }).fill(tag);
+        await page.getByTestId('new-tag').getByTestId('add-button').click();
+        await expect(page.getByText(`#${tag}`, { exact: true })).toBeVisible();
+      }
+
+      const accountPage = await navigation.goToAccountPage(
+        'Capital One Checking',
+      );
+      await accountPage.createSingleTransaction({
+        debit: '10.00',
+        payee: 'Kroger',
+        notes: '#red',
+        category: 'Food',
+      });
+      await accountPage.createSingleTransaction({
+        debit: '20.00',
+        payee: 'Kroger',
+        notes: '#circle',
+        category: 'Food',
+      });
+      await accountPage.createSingleTransaction({
+        debit: '30.00',
+        payee: 'Kroger',
+        notes: '#red #circle',
+        category: 'Food',
+      });
+
+      reportsPage = await navigation.goToReportsPage();
+      await reportsPage.waitToLoad();
+      customReportPage = await reportsPage.goToCustomReportPage();
+
+      const splitRow = page.getByText('Split:', { exact: true }).locator('..');
+      await splitRow.getByRole('button').click();
+      await page.getByRole('button', { name: 'Tag', exact: true }).click();
+      await customReportPage.selectViz('Data Table');
+
+      await expect(page.getByText('#red', { exact: true })).toBeVisible();
+      await expect(page.getByText('#circle', { exact: true })).toBeVisible();
+      await expect(
+        page.getByText('#circle + #red', { exact: true }),
+      ).toBeVisible();
+      await expect(page.getByTestId('report-row-#circle + #red')).toContainText(
+        '-30.00',
+      );
+
+      await page.getByRole('button', { name: 'Tag scope: All tags' }).click();
+      const tagScopePopover = page.locator('[data-popover]');
+      await expect(tagScopePopover).toMatchThemeScreenshots();
+      await page.keyboard.press('Escape');
+      const typeRow = page.getByText('Type:', { exact: true }).locator('..');
+      await expect(splitRow).toMatchThemeScreenshots();
+
+      await page
+        .getByTestId('report-row-#circle + #red')
+        .getByText('-30.00', { exact: true })
+        .click();
+      await page.waitForURL('**/accounts');
+
+      const drilldownAccountPage = new AccountPage(page);
+      await expect(
+        drilldownAccountPage.transactionTable
+          .getByTestId('notes')
+          .filter({ hasText: '#red #circle' }),
+      ).toHaveCount(1);
+      const visibleTagNotes = (
+        await drilldownAccountPage.transactionTable
+          .getByTestId('notes')
+          .allTextContents()
+      ).filter(note => note.includes('#'));
+      expect(visibleTagNotes).toEqual(['#red #circle']);
+
+      await page.goBack();
+      await page.getByTestId('reports-page').waitFor();
+      await splitRow.getByRole('button').click();
+      await page.getByRole('button', { name: 'Tag', exact: true }).click();
+      await customReportPage.selectViz('Data Table');
+      await page.getByRole('button', { name: 'Tag scope: All tags' }).click();
+      const scopedTagPopover = page.getByTestId('tag-scope-popover');
+      await scopedTagPopover
+        .getByRole('textbox', { name: 'Search tags' })
+        .fill('red');
+      await scopedTagPopover
+        .getByRole('button', { name: '#red', exact: true })
+        .click();
+      await expect(
+        scopedTagPopover.locator('button').filter({ hasText: '#red' }),
+      ).toBeVisible();
+      await scopedTagPopover.getByRole('button', { name: 'Apply' }).click();
+
+      await expect(
+        page.getByRole('button', { name: 'Tag scope: #red' }),
+      ).toBeVisible();
+      await expect(page.getByTestId('report-row-#red')).toContainText('-40.00');
+      await expect(
+        page.getByText('#circle + #red', { exact: true }),
+      ).not.toBeVisible();
+
+      await typeRow
+        .getByRole('button', { name: 'Payment', exact: true })
+        .click();
+      await page.getByRole('button', { name: 'Budgeted', exact: true }).click();
+      await expect(splitRow.getByRole('button')).toHaveText('Category');
+    });
+
+    test('warns about missing scoped tags without transaction filters', async () => {
+      await page.evaluate(() => {
+        sessionStorage.setItem('url', window.location.pathname);
+        sessionStorage.setItem(
+          'report',
+          JSON.stringify({
+            groupBy: 'Tag',
+            tagScope: { mode: 'selected', tagIds: ['deleted-tag-id'] },
+            conditions: [],
+          }),
+        );
+      });
+      await page.reload();
+
+      const warning = page.getByText(/non-existing filter or tag/);
+      await expect(warning).toBeVisible();
+
+      const splitRow = page.getByText('Split:', { exact: true }).locator('..');
+      await splitRow.getByRole('button', { name: 'Tag', exact: true }).click();
+      await page.getByRole('button', { name: 'Category', exact: true }).click();
+      await expect(warning).not.toBeVisible();
     });
 
     test('Switches to Data Table and checks the visuals', async () => {
@@ -166,6 +335,47 @@ test.describe('Reports', () => {
       await customReportPage.showLegendButton.click();
     });
 
+    ['Bar Graph', 'Line Graph'].forEach(graph => {
+      test(`${graph} keeps its height when the legend needs scrolling`, async () => {
+        await page.setViewportSize({ width: 1280, height: 700 });
+        await customReportPage.selectMode('time');
+        await customReportPage.selectViz(graph);
+        await page
+          .getByRole('button', { name: 'Options', exact: true })
+          .click();
+        await page
+          .getByRole('button', { name: 'Show empty rows', exact: true })
+          .click();
+        await page.keyboard.press('Escape');
+
+        const content = page.locator('#custom-report-content');
+        const chart = content.locator('.recharts-wrapper');
+        await expect(chart).toBeVisible();
+        const originalHeight = await chart.evaluate(el => el.clientHeight);
+
+        await customReportPage.showSummaryButton.click();
+        await customReportPage.showLegendButton.click();
+
+        await expect
+          .poll(() => chart.evaluate(el => el.clientHeight))
+          .toBe(originalHeight);
+        const legend = content
+          .getByText('Category', { exact: true })
+          .locator('..');
+        await expect
+          .poll(() => legend.evaluate(el => el.scrollHeight > el.clientHeight))
+          .toBe(true);
+        await legend.hover();
+        await page.mouse.wheel(0, 500);
+        await expect
+          .poll(() => legend.evaluate(el => el.scrollTop))
+          .toBeGreaterThan(0);
+        await expect
+          .poll(() => chart.evaluate(el => el.clientHeight))
+          .toBe(originalHeight);
+      });
+    });
+
     test('Validates that "show summary" button shows the summary', async () => {
       await customReportPage.selectViz('Bar Graph');
       await customReportPage.showSummaryButton.click();
@@ -181,5 +391,47 @@ test.describe('Reports', () => {
 
       await customReportPage.showLabelsButton.click();
     });
+  });
+});
+
+test.describe('Reports without transactions', () => {
+  let page: Page;
+
+  test.beforeEach(async ({ browser }) => {
+    page = await browser.newPage();
+  });
+
+  test.afterEach(async () => {
+    await page?.close();
+  });
+
+  test('creates a custom report in an empty budget', async () => {
+    const pageErrors: Error[] = [];
+    page.on('pageerror', error => pageErrors.push(error));
+
+    const configurationPage = new ConfigurationPage(page);
+    const navigation = new Navigation(page);
+
+    await page.goto('/');
+    await configurationPage.startFresh();
+
+    const reportsPage = await navigation.goToReportsPage();
+    await reportsPage.waitToLoad();
+    const customReportPage = await reportsPage.goToCustomReportPage();
+
+    await expect(page).toHaveURL(/\/reports\/custom/);
+    await expect(
+      customReportPage.pageContent.getByRole('button', {
+        name: 'Total',
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      customReportPage.pageContent.getByRole('button', {
+        name: 'Time',
+        exact: true,
+      }),
+    ).toBeVisible();
+    expect(pageErrors).toEqual([]);
   });
 });

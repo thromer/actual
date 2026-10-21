@@ -14,6 +14,8 @@ import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { pushModal } from '#modals/modalsSlice';
 import { useDispatch } from '#redux';
 
+import { useTour } from './tour/TourProvider';
+
 const getPageDocs = (page: string) => {
   switch (page) {
     case '/budget':
@@ -21,13 +23,28 @@ const getPageDocs = (page: string) => {
     case '/reports':
       return 'https://actualbudget.org/docs/reports/';
     case '/schedules':
+    case '/settings/schedules':
       return 'https://actualbudget.org/docs/schedules';
     case '/payees':
+    case '/settings/payees':
       return 'https://actualbudget.org/docs/transactions/payees';
     case '/rules':
+    case '/settings/rules':
       return 'https://actualbudget.org/docs/budgeting/rules';
+    case '/tags':
+    case '/settings/tags':
+      return 'https://actualbudget.org/docs/transactions/tags';
+    case '/bank-sync':
+    case '/settings/bank-sync':
+      return 'https://actualbudget.org/docs/advanced/bank-sync';
+    case '/settings/experimental':
+      return 'https://actualbudget.org/docs/experimental';
     case '/settings':
+    case '/settings/general':
+    case '/settings/advanced':
       return 'https://actualbudget.org/docs/settings';
+    case '/notifications':
+      return 'https://actualbudget.org/docs/notifications';
     default:
       // All pages under /accounts, plus any missing pages
       return 'https://actualbudget.org/docs';
@@ -42,6 +59,7 @@ type HelpMenuItem =
   | 'docs'
   | 'discord'
   | 'keyboard-shortcuts'
+  | 'start-tour'
   | 'goal-templates';
 
 type HelpButtonProps = {
@@ -56,6 +74,7 @@ const HelpButton = forwardRef<HTMLButtonElement, HelpButtonProps>(
         variant="bare"
         ref={ref}
         onPress={onPress}
+        data-testid="help-menu-button"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -79,6 +98,7 @@ export const HelpMenu = () => {
 
   const dispatch = useDispatch();
   const page = useLocation().pathname;
+  const { startTour } = useTour();
 
   const handleItemSelect = (item: HelpMenuItem) => {
     switch (item) {
@@ -90,6 +110,9 @@ export const HelpMenu = () => {
         break;
       case 'keyboard-shortcuts':
         dispatch(pushModal({ modal: { name: 'keyboard-shortcuts' } }));
+        break;
+      case 'start-tour':
+        startTour();
         break;
       case 'goal-templates':
         dispatch(pushModal({ modal: { name: 'goal-templates' } }));
@@ -127,6 +150,7 @@ export const HelpMenu = () => {
               text: t('Community support (Discord)'),
             },
             { name: 'keyboard-shortcuts', text: t('Keyboard shortcuts') },
+            { name: 'start-tour', text: t('Take a tour') },
             ...(showGoalTemplates && page === '/budget'
               ? [{ name: 'goal-templates', text: t('Goal templates') }]
               : []),

@@ -17,6 +17,7 @@ import {
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
+  YAxis,
 } from 'recharts';
 
 import { PrivacyFilter } from '#components/PrivacyFilter';
@@ -61,6 +62,7 @@ export function BalanceForecastCard({
       ? 'tracking-budget'
       : 'schedules';
   const isTrackingBudgetForecast = source === 'tracking-budget';
+  const granularity = meta?.granularity || 'Monthly';
 
   const [nameMenuOpen, setNameMenuOpen] = useState(false);
   const [isCardHovered, setIsCardHovered] = useState(false);
@@ -81,6 +83,8 @@ export function BalanceForecastCard({
   // `start` may be `yyyy-MM` or `yyyy-MM-dd`; `firstDayOfMonth` handles both.
   const startDate = monthUtils.firstDayOfMonth(start);
   const endDate = monthUtils.lastDayOfMonth(end);
+
+  const yAxisBase = meta?.yAxisBase ?? 'Auto';
 
   const {
     data: forecastData,
@@ -124,7 +128,7 @@ export function BalanceForecastCard({
     forecastData: normalizedForecastData,
     start: chartRange.start,
     end: chartRange.end,
-    granularity: 'Monthly',
+    granularity,
   });
   const endingPoint = chartData.at(-1);
   const lowestPoint = getLowestChartDataPoint(chartData);
@@ -142,7 +146,7 @@ export function BalanceForecastCard({
     forecastData: normalizedForecastData,
     start: chartRange.start,
     end: chartRange.end,
-    granularity: 'Monthly',
+    granularity,
   });
   const hasFilters =
     !isTrackingBudgetForecast && (meta?.conditions?.length ?? 0) > 0;
@@ -239,8 +243,14 @@ export function BalanceForecastCard({
                     width={width}
                     height={height}
                     data={chartData}
+
                     margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
                   >
+                    <YAxis
+                      hide // do not show the axis labels (balance)
+                      domain={[yAxisBase === 'Zero-Based' ? 0 : 'auto', 'auto']}
+                      allowDataOverflow={false} // false by default but explicit > implicit
+                    />
                     <defs>
                       <linearGradient
                         id={gradientId}

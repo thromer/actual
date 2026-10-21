@@ -25,11 +25,15 @@ import {
 } from '#components/reports/chart-theme';
 import { Container } from '#components/reports/Container';
 import { numberFormatterTooltip } from '#components/reports/numberFormatter';
+import { getIntervalFormat } from '#components/reports/ReportOptions';
+import { useDateFormat } from '#hooks/useDateFormat';
 import { useFormat } from '#hooks/useFormat';
 import type { UseFormatResult } from '#hooks/useFormat';
 import { usePrivacyMode } from '#hooks/usePrivacyMode';
 
 import { computePadding } from './util/computePadding';
+
+const PARSE_REFERENCE_DATE = new Date(0);
 
 type NetWorthDataPoint = {
   x: string;
@@ -250,6 +254,7 @@ export function NetWorthGraph({
   const privacyMode = usePrivacyMode();
   const id = useId();
   const format = useFormat();
+  const dateFormat = useDateFormat() || 'MM/dd/yyyy';
   const animationProps = useRechartsAnimation({ animationDuration: 1000 });
   const [isTooltipActive, setIsTooltipActive] = useState(false);
   const [hoveredAccountId, setHoveredAccountId] = useState<string | null>(null);
@@ -320,18 +325,22 @@ export function NetWorthGraph({
     );
   }, [sortedAccounts, mode]);
 
-  // Generate weekly tick positions when viewing Daily data
+  // Generate weekly tick positions when viewing Daily data.
+  // `point.x` is a display label, so it has to be parsed back with the same
+  // format that produced it in net-worth-spreadsheet -- otherwise `parse`
+  // returns Invalid Date, `getDay` returns NaN, and the ticks vanish silently.
   const weeklyTicks = useMemo(() => {
     if (interval !== 'Daily') {
       return undefined;
     }
+    const pointFormat = getIntervalFormat(interval, dateFormat);
     return graphData.data
       .filter(point => {
-        const date = parse(point.x, 'yy-MM-dd', new Date());
+        const date = parse(point.x, pointFormat, PARSE_REFERENCE_DATE);
         return getDay(date) === 1; // Monday
       })
       .map(point => point.x);
-  }, [interval, graphData.data]);
+  }, [interval, dateFormat, graphData.data]);
 
   return (
     <Container

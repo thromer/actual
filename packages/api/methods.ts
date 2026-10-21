@@ -1,10 +1,12 @@
 import { send } from '@actual-app/core/platform/client/connection';
 import type {
   APIAccountEntity,
+  APIAccountGroupEntity,
   APICategoryEntity,
   APICategoryGroupEntity,
   APIFileEntity,
   APIPayeeEntity,
+  APIRuleEntity,
   APIScheduleEntity,
   APITagEntity,
 } from '@actual-app/core/server/api-models';
@@ -109,6 +111,12 @@ export async function sync() {
   return send('api/sync');
 }
 
+/**
+ * Run bank sync for one account, or for every linked account when no
+ * `accountId` is given. Resolves with the ids of the transactions the sync
+ * reconciled, so callers can tell an idle sync from one that imported
+ * something without querying the transaction table themselves.
+ */
 export async function runBankSync(args?: {
   accountId: APIAccountEntity['id'];
 }) {
@@ -211,6 +219,12 @@ export function deleteTransaction(id: TransactionEntity['id']) {
   return send('api/transaction-delete', { id });
 }
 
+export function mergeTransactions(
+  ids: [TransactionEntity['id'], TransactionEntity['id']],
+) {
+  return send('api/transactions-merge', { ids });
+}
+
 export function getAccounts() {
   return send('api/accounts-get');
 }
@@ -251,6 +265,25 @@ export function deleteAccount(id: APIAccountEntity['id']) {
 
 export function getAccountBalance(id: APIAccountEntity['id'], cutoff?: Date) {
   return send('api/account-balance', { id, cutoff });
+}
+
+export function getAccountGroups() {
+  return send('api/account-groups-get');
+}
+
+export function createAccountGroup(group: Omit<APIAccountGroupEntity, 'id'>) {
+  return send('api/account-group-create', { group });
+}
+
+export function updateAccountGroup(
+  id: APIAccountGroupEntity['id'],
+  fields: Partial<Omit<APIAccountGroupEntity, 'id'>>,
+) {
+  return send('api/account-group-update', { id, fields });
+}
+
+export function deleteAccountGroup(id: APIAccountGroupEntity['id']) {
+  return send('api/account-group-delete', { id });
 }
 
 export function getCategoryGroups(options: { hidden?: boolean } = {}) {
@@ -362,11 +395,11 @@ export function getPayeeRules(id: RuleEntity['id']) {
   return send('api/payee-rules-get', { id });
 }
 
-export function createRule(rule: Omit<RuleEntity, 'id'>) {
+export function createRule(rule: Omit<APIRuleEntity, 'id'>) {
   return send('api/rule-create', { rule });
 }
 
-export function updateRule(rule: RuleEntity) {
+export function updateRule(rule: APIRuleEntity) {
   return send('api/rule-update', { rule });
 }
 
@@ -406,6 +439,13 @@ export function getSchedules() {
   return send('api/schedules-get');
 }
 
+export function getScheduleDates(
+  date: APIScheduleEntity['date'],
+  options: { start?: string; end?: string; count?: number } = {},
+) {
+  return send('api/schedule-dates-get', { date, ...options });
+}
+
 export function getIDByName(
   type: 'accounts' | 'schedules' | 'categories' | 'payees',
   name: string,
@@ -420,4 +460,11 @@ export function getServerVersion() {
 /** Read the budget's synced preferences (number format, currency, etc.). */
 export function getPreferences(): Promise<SyncedPrefs> {
   return send('preferences/get');
+}
+
+export function setPreference<T extends keyof SyncedPrefs>(
+  id: T,
+  value: SyncedPrefs[T] | undefined,
+): Promise<void> {
+  return send('preferences/save', { id, value });
 }

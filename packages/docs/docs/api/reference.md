@@ -20,7 +20,8 @@ import APIList from './APIList';
 "importTransactions",
 "getTransactions",
 "updateTransaction",
-"deleteTransaction"
+"deleteTransaction",
+"mergeTransactions"
 ]} />
 
 <APIList title="Accounts" sections={[
@@ -70,7 +71,6 @@ import APIList from './APIList';
 <APIList title="Rules" sections={[
 "ConditionOrAction",
 "Rule",
-"Payee rule",
 "getRules",
 "getPayeeRules",
 "createRule",
@@ -84,7 +84,8 @@ import APIList from './APIList';
 "getSchedules",
 "createSchedule",
 "updateSchedule",
-"deleteSchedule"
+"deleteSchedule",
+"getScheduleDates"
 ]} />
 
 <APIList title="Notes" sections={[
@@ -108,7 +109,8 @@ import APIList from './APIList';
 "batchBudgetUpdates",
 "runQuery",
 "getIDByName",
-"getPreferences"
+"getPreferences",
+"setPreference"
 ]} />
 
 ## Types of Methods
@@ -280,6 +282,7 @@ This method has the following optional flags (passed as the `opts` object):
 - `defaultCleared`: whether imported transactions should be marked as cleared (defaults to `true`)
 - `dryRun`: if `true`, returns what would be added/updated without actually modifying the database (defaults to `false`)
 - `reimportDeleted`: if `true`, transactions that were previously imported and then deleted will be reimported; if `false`, they will be skipped (defaults to `true` for backward compatibility — note that the [file import UI](../transactions/importing.md#avoiding-duplicate-transactions) defaults to `false`)
+- `payeeNameNormalization`: how `payee_name` is processed when creating a payee — `'title-case'` re-capitalizes each word, `'original'` keeps the name as given, apart from trimming surrounding whitespace (defaults to `'title-case'`)
 
 Example using opts:
 
@@ -313,6 +316,21 @@ Update fields of a transaction. `fields` can specify any field described in [`Tr
 <Method name="deleteTransaction" args={[{ name: 'id', type: 'id'}]} />
 
 Delete a transaction.
+
+#### `mergeTransactions`
+
+<Method name="mergeTransactions" args={[{ name: 'ids', type: 'id[]' }]} returns="Promise<id>" />
+
+Merge exactly two distinct transactions from the same account into one. Returns the id of the surviving transaction; the other one is deleted.
+
+The order of the ids does not decide which transaction survives:
+
+- an imported transaction is kept over a manually entered one
+- otherwise, the transaction with the earlier date is kept
+
+The surviving transaction keeps its own field values and fills in any empty ones from the deleted transaction. It is marked cleared if either transaction was.
+
+The merge fails if you pass the same id twice, or if the two transactions are in different accounts, have different amounts, or are transfers to different accounts.
 
 #### Examples
 
@@ -351,20 +369,6 @@ await updateTransaction(id, { category: foodCategory.id });
 #### Account
 
 <StructType fields={objects.account} />
-
-#### Account Types
-
-The account type must be one of these valid strings:
-
-- `checking`
-- `savings`
-- `credit`
-- `investment`
-- `mortgage`
-- `debt`
-- `other`
-
-The account type does not affect anything currently. It's simply extra information about the account.
 
 #### Closing Accounts
 
@@ -425,17 +429,60 @@ Gets the balance for an account. If a cutoff is given, it gives the account bala
 #### Examples
 
 ```js
-// Create a savings accounts
+// Create a savings account
 createAccount({
-  name: "Ally Savings",
-  type: "savings
-})
+  name: 'Ally Savings',
+});
 ```
 
 ```js
 // Get all accounts
 
 let accounts = await getAccounts();
+```
+
+## Account Groups
+
+### Account Group
+
+<StructType fields={objects.accountGroup} />
+
+Account groups let you organize accounts into named groups, for example "Savings" or "Credit Cards". An account can belong to at most one group, set through the `account_group_id` field on [`Account`](#account).
+
+#### Methods
+
+#### `getAccountGroups`
+
+<Method name="getAccountGroups" args={[]} returns="Promise<AccountGroup[]>" />
+
+Get all account groups. Returns an array of [`Account Group`](#account-group) objects.
+
+#### `createAccountGroup`
+
+<Method name="createAccountGroup" args={[{ name: 'group', type: 'AccountGroup' }]} returns="Promise<id>" />
+
+Create an account group. Returns the `id` of the new group.
+
+#### `updateAccountGroup`
+
+<Method name="updateAccountGroup" args={[{ name: 'id', type: 'id' }, { name: 'fields', type: 'object' }]} />
+
+Update fields of an account group. `fields` can specify the `name` field described in [`Account Group`](#account-group).
+
+#### `deleteAccountGroup`
+
+<Method name="deleteAccountGroup" args={[{ name: 'id', type: 'id' }]} />
+
+Delete an account group. Any accounts in the group are left ungrouped.
+
+#### Examples
+
+```js
+// Group two accounts under "Savings"
+
+const groupId = await createAccountGroup({ name: 'Savings' });
+await updateAccount(allySavingsId, { account_group_id: groupId });
+await updateAccount(marcusSavingsId, { account_group_id: groupId });
 ```
 
 ## Categories
@@ -653,10 +700,6 @@ await updateTag(id, { color: '#00ff00' });
 
 <StructType fields={objects.rule} />
 
-#### Payee Rule
-
-<StructType fields={objects.payeeRule} />
-
 #### Methods
 
 #### `getRules`
@@ -669,7 +712,7 @@ Get all rules.
 
 <Method name="getPayeeRules" args={[{ name: 'payeeId', type: "id" }]} returns="Promise<Rule[]>" />
 
-Get all rules associated with `payeeId`.
+Get all rules associated with `payeeId`. These are ordinary `Rule` objects, in the same shape `getRules` returns. A rule is associated with a payee when one of its conditions or actions has a `payee` field referencing that id, so the returned rules have no `payee_id` property.
 
 #### `createRule`
 
@@ -746,6 +789,44 @@ Update fields of a rule. `fields` can specify any field described in [`Schedule`
 
 <Method name="deleteSchedule" args={[{ name: 'id', type: 'id' }]} returns="Promise<null>" />
 
+#### `getScheduleDates`
+
+<Method name="getScheduleDates" args={[{ name: 'date', type: 'date | RecurConfig' }, { name: 'options', type: '{ start?: date, end?: date, count?: number }' }]} returns="Promise<date[]>" />
+
+Expands the `date` of a [`Schedule`](#schedule) into the dates it falls on, in ascending order. Pass a schedule's `date` field as returned by `getSchedules`, or any [`RecurConfig`](#recurconfig).
+
+Every recurrence setting is taken into account: `frequency`, `interval`, `patterns` (including the last day or the last weekday of the month), `endMode` and, when `skipWeekend` is set, the move to the Friday before or the Monday after the weekend (`weekendSolveMode`).
+
+- `start`: first date to include. Defaults to today.
+- `end`: last date to include.
+- `count`: maximum number of dates to return.
+
+The window applies to the dates after the weekend move, so the result matches the dates Actual shows for the schedule. A date that several occurrences move onto (a daily schedule's Saturday and Sunday both landing on Monday) is listed once, and `count` counts distinct dates. A recurrence that never ends needs an `end` or a `count`.
+
+```js
+const [rent] = await api.getSchedules();
+
+// Every date the schedule falls on in 2025
+await api.getScheduleDates(rent.date, {
+  start: '2025-01-01',
+  end: '2025-12-31',
+});
+
+// The next three dates from today
+await api.getScheduleDates(rent.date, { count: 3 });
+
+// The same helper works on a recurrence that is not saved yet
+await api.getScheduleDates(
+  {
+    frequency: 'monthly',
+    start: '2025-01-01',
+    patterns: [{ type: 'FR', value: -1 }],
+  },
+  { start: '2025-01-01', count: 2 },
+);
+// ['2025-01-31', '2025-02-28']
+```
+
 ## Notes
 
 Notes can be attached to any entity (categories, budget months, etc.) by ID. They are also used to define budget templates and savings goals (e.g. `#template 250`, `#goal 1000`).
@@ -794,9 +875,23 @@ Synchronizes the locally cached budget files with the server's copy.
 
 #### `runBankSync`
 
-<Method name="runBankSync" args={[{ properties: [{ name: 'accountId', type: 'string' }] }]} returns="Promise<void>" />
+<Method name="runBankSync" args={[{ name: 'args?', properties: [{ name: 'accountId', type: 'string' }] }]} returns="Promise<{ newTransactions: string[]; matchedTransactions: string[]; updatedAccounts: string[] }>" />
 
 Run the 3rd party (GoCardless, SimpleFIN) bank sync operation. This will download the transactions and insert them into the ledger.
+
+Omit the argument to sync every linked account. If you pass the argument, include `accountId`.
+
+Resolves with what the sync reconciled, so a caller can tell an idle sync from one that imported something without querying the ledger:
+
+```js
+{
+  newTransactions: ['id', ...],     // transactions the sync added
+  matchedTransactions: ['id', ...], // existing transactions it updated
+  updatedAccounts: ['id', ...]      // accounts the sync added transactions to
+}
+```
+
+A sync that adds or updates nothing resolves with three empty arrays. Errors still reject, so a resolved promise always means the sync succeeded. When syncing every account, one failing account rejects the whole call, but transactions already imported for the other accounts stay in the ledger and are not reported. After a rejection, check the ledger instead of assuming nothing was imported.
 
 #### `runImport`
 
@@ -814,7 +909,9 @@ Returns a list of all budget files either locally cached or on the remote server
 
 <Method name="loadBudget" args={[{ properties: [{ name: 'syncId', type: 'string' }] }]} returns="Promise<void>" />
 
-Load a locally cached budget file.
+Load a locally cached budget file using its local `id` from `getBudgets()`. Downloaded budgets receive a local ID that can differ between devices; do not use the Budget ID from another device.
+
+To download and open a budget using its Sync ID, use `downloadBudget()`.
 
 #### `downloadBudget`
 
@@ -863,3 +960,9 @@ return error or the current server versions.
 <Method name="getPreferences" args={[]} returns="Promise<SyncedPrefs>" />
 
 Returns the budget's synced preferences — settings that sync across devices, such as the number format (`numberFormat`, `hideFraction`), currency (`defaultCurrencyCode`, `currencySymbolPosition`, `currencySpaceBetweenAmountAndSymbol`), date format (`dateFormat`), and first day of the week (`firstDayOfWeekIdx`). All values are strings (or `undefined` if the preference has never been set). The `SyncedPrefs` type is exported from `@actual-app/api/models`.
+
+#### `setPreference`
+
+<Method name="setPreference" args={[{ name: 'id', type: 'keyof SyncedPrefs' }, { name: 'value', type: 'string | undefined' }]} returns="Promise<void>" />
+
+Sets a single synced preference. The `id` must be a valid SyncedPrefs key.

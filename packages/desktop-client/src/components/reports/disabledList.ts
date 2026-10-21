@@ -38,6 +38,14 @@ const currentIntervalOptions = [
     disableInclude: true,
   },
   {
+    description: t('Current quarter'),
+    disableInclude: true,
+  },
+  {
+    description: t('Previous quarter'),
+    disableInclude: true,
+  },
+  {
     description: t('Last 30 days'),
     disableInclude: true,
   },
@@ -95,7 +103,14 @@ const totalGraphOptions: graphOptions[] = [
   {
     description: 'AreaGraph',
     // CategoryGroup is only valid for DonutGraph
-    disabledSplit: ['Category', 'Group', 'CategoryGroup', 'Payee', 'Account'],
+    disabledSplit: [
+      'Category',
+      'Group',
+      'CategoryGroup',
+      'Payee',
+      'Account',
+      'Tag',
+    ],
     defaultSplit: 'Interval',
     disabledType: [],
     defaultType: 'Payment',
@@ -204,11 +219,9 @@ export function disabledLegendLabel(
   return disableLegendLabel[type];
 }
 
-export function defaultsGraphList(
-  item: string,
-  newGraph: string,
-  type: 'defaultSplit' | 'defaultType' | 'defaultSort',
-) {
+export function defaultsGraphList<
+  K extends 'defaultSplit' | 'defaultType' | 'defaultSort',
+>(item: string, newGraph: string, type: K) {
   const graphList = modeOptions.find(d => d.description === item);
   if (!graphList) {
     return '';

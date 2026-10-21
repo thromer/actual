@@ -6,6 +6,9 @@ import { fileURLToPath } from 'node:url';
 import convict from 'convict';
 import createDebug from 'debug';
 
+import { applyFileEnv } from './config-file-env';
+import { parseAllowedNetwork } from './util/ssrf';
+
 const require = createRequire(import.meta.url);
 const debug = createDebug('actual:config');
 const debugSensitive = createDebug('actual-sensitive:config');
@@ -56,6 +59,21 @@ convict.addFormat({
 
     return val; // Let validate() handle invalid values
   },
+});
+
+convict.addFormat({
+  name: 'ipNetworks',
+  validate(values) {
+    if (!Array.isArray(values)) {
+      throw new Error('Expected an array of IP addresses or CIDR ranges');
+    }
+    values.forEach(parseAllowedNetwork);
+  },
+  coerce: value =>
+    value
+      .split(',')
+      .map(entry => entry.trim())
+      .filter(Boolean),
 });
 
 // Main config schema
@@ -129,6 +147,12 @@ const configSchema = convict({
     format: Array,
     default: ['password', 'header', 'openid'],
     env: 'ACTUAL_ALLOWED_LOGIN_METHODS',
+  },
+  simplefinAllowedNetworks: {
+    doc: 'Private IP addresses or CIDR ranges that may be used as a SimpleFIN server',
+    format: 'ipNetworks',
+    default: [],
+    env: 'ACTUAL_SIMPLEFIN_ALLOWED_NETWORKS',
   },
   trustedProxies: {
     doc: 'List of trusted proxies.',
@@ -318,6 +342,17 @@ if (process.env.ACTUAL_CONFIG_PATH) {
 if (fs.existsSync(configPath)) {
   configSchema.loadFile(configPath);
   debug(`Config loaded`);
+}
+
+// `<VAR>_FILE` is applied after loadFile so it beats both config.json and the
+// plain environment variable, and before validate so the value is checked.
+for (const [fileEnvVar, settingPath] of [
+  ['ACTUAL_OPENID_CLIENT_SECRET_FILE', 'openId.client_secret'],
+  ['ACTUAL_GITHUB_TOKEN_FILE', 'github.token'],
+]) {
+  if (applyFileEnv(configSchema, fileEnvVar, settingPath)) {
+    debug(`Loaded ${settingPath} from ${fileEnvVar}`);
+  }
 }
 
 debug(`Validating config`);

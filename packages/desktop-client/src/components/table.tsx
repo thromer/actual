@@ -125,14 +125,13 @@ export const Field = forwardRef<HTMLDivElement, FieldProps>(function Field(
   );
 });
 
-export function UnexposedCellContent({
-  value,
-  formatter,
-  style,
-  ...props
-}: Pick<CellProps, 'value' | 'formatter' | 'style'>) {
+export const UnexposedCellContent = forwardRef<
+  HTMLSpanElement,
+  Pick<CellProps, 'value' | 'formatter' | 'style'>
+>(function UnexposedCellContent({ value, formatter, style, ...props }, ref) {
   return (
     <Text
+      innerRef={ref}
       style={{
         flexGrow: 1,
         whiteSpace: 'nowrap',
@@ -145,7 +144,7 @@ export function UnexposedCellContent({
       {formatter ? formatter(value) : value}
     </Text>
   );
-}
+});
 
 type CellProps = Omit<ComponentProps<typeof View>, 'children' | 'value'> & {
   formatter?: (value: string, type?: unknown) => string | JSX.Element;
@@ -938,7 +937,7 @@ export type TableProps<T extends TableItem = TableItem> = {
     item: T;
     editing: boolean;
     focusedField: string | null;
-    onEdit: (id: T['id'], field: string) => void;
+    onEdit: TableNavigator<T>['onEdit'];
     index: number;
     position: number;
   }) => ReactNode;
@@ -1048,6 +1047,15 @@ export const Table = forwardRef(
       },
     }));
 
+    function saveScrollDelayed() {
+      saveScrollWidth(
+        scrollContainer.current?.offsetParent
+          ? scrollContainer.current?.offsetParent.clientWidth
+          : 0,
+        scrollContainer.current ? scrollContainer.current.clientWidth : 0,
+      );
+    }
+
     useLayoutEffect(() => {
       // We wait for the list to mount because AutoSizer needs to run
       // before it's mounted
@@ -1064,15 +1072,6 @@ export const Table = forwardRef(
         return () => clearTimeout(timeout);
       }
     });
-
-    function saveScrollDelayed() {
-      saveScrollWidth(
-        scrollContainer.current?.offsetParent
-          ? scrollContainer.current?.offsetParent.clientWidth
-          : 0,
-        scrollContainer.current ? scrollContainer.current.clientWidth : 0,
-      );
-    }
 
     function renderRow({ index, style, key }) {
       const item = items[index];

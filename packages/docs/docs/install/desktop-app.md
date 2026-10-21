@@ -1,5 +1,5 @@
 ---
-title: 'Desktop app'
+title: 'Desktop App'
 ---
 
 The simplest way to get started with Actual is by [downloading the desktop app](../../../download). This app bundles Actual's full budgeting capabilities into a streamlined application that's perfect for users looking for a smooth, hassle-free experience.
@@ -22,9 +22,9 @@ If you're already running your own server, the Web client remains your best opti
 
 Setting up the desktop app local server is straightforward. Follow these steps:
 
-In the server selection area, click **Change** as shown below:
+In the server selection area at the bottom of the welcome screen, click **Set up sync** as shown below:
 
-![](/img/install/change-server.webp)
+<img width="424" alt="The bottom of the welcome screen with the Set up sync link highlighted" src="/img/install/desktop-app-set-up-sync@2x.webp" />
 <br />
 
 The server runs on `localhost` by default and mostly uses the default [server configuration](../config/index.md). You can modify the port if necessary.

@@ -13,6 +13,7 @@ import type {
   CategoryGroupEntity,
   CustomReportEntity,
   PayeeEntity,
+  TagEntity,
 } from '@actual-app/core/types/models';
 import type { SyncedPrefs } from '@actual-app/core/types/prefs';
 
@@ -23,6 +24,7 @@ import { ReportOptions } from '#components/reports/ReportOptions';
 import { createCustomSpreadsheet } from '#components/reports/spreadsheets/custom-spreadsheet';
 import { createGroupedSpreadsheet } from '#components/reports/spreadsheets/grouped-spreadsheet';
 import { useReport } from '#components/reports/useReport';
+import { useDateFormat } from '#hooks/useDateFormat';
 import { useSyncedPref } from '#hooks/useSyncedPref';
 
 function ErrorFallback() {
@@ -69,6 +71,7 @@ export function GetCardData({
   payees,
   accounts,
   categories,
+  tags,
   earliestTransaction,
   latestTransaction,
   firstDayOfWeekIdx,
@@ -78,6 +81,7 @@ export function GetCardData({
   payees: PayeeEntity[];
   accounts: AccountEntity[];
   categories: { list: CategoryEntity[]; grouped: CategoryGroupEntity[] };
+  tags: TagEntity[];
   earliestTransaction: string;
   latestTransaction: string;
   firstDayOfWeekIdx?: SyncedPrefs['firstDayOfWeekIdx'];
@@ -85,6 +89,7 @@ export function GetCardData({
 }) {
   const { isNarrowWidth } = useResponsive();
   const [budgetType = 'envelope'] = useSyncedPref('budgetType');
+  const dateFormat = useDateFormat() || 'MM/dd/yyyy';
 
   let startDate = report.startDate;
   let endDate = report.endDate;
@@ -158,19 +163,26 @@ export function GetCardData({
       balanceTypeOp: ReportOptions.balanceTypeMap.get(report.balanceType),
       payees,
       accounts,
+      tags,
+      tagScope: report.tagScope,
       graphType: report.graphType,
       firstDayOfWeekIdx,
       sortByOp: report.sortBy,
+      dateFormat,
     });
   }, [
     report,
     categories,
     payees,
     accounts,
+    tags,
     startDate,
     endDate,
     firstDayOfWeekIdx,
     budgetType,
+    // Load-bearing: without this the card keeps its old interval labels after
+    // the date format preference changes, until something else invalidates it.
+    dateFormat,
   ]);
   const graphData = useReport('default' + report.name, getGraphData);
   const groupedData = useReport('grouped' + report.name, getGroupData);

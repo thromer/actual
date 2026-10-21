@@ -2,7 +2,7 @@ import React, { useEffect, useEffectEvent, useRef } from 'react';
 import type { ReactElement } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { useTranslation } from 'react-i18next';
-import { Navigate, Route, Routes, useHref, useLocation } from 'react-router';
+import { Route, Routes, useHref, useLocation } from 'react-router';
 
 import { useResponsive } from '@actual-app/components/hooks/useResponsive';
 import { theme } from '@actual-app/components/theme';
@@ -12,11 +12,12 @@ import * as undo from '@actual-app/core/platform/client/undo';
 import { getLatestAppVersion, sync } from '#app/appSlice';
 import { ProtectedRoute } from '#auth/ProtectedRoute';
 import { Permissions } from '#auth/types';
-import { useAccounts } from '#hooks/useAccounts';
+import { useAutomaticBankSync } from '#hooks/useAutomaticBankSync';
 import { useGlobalPref } from '#hooks/useGlobalPref';
 import { useLocalPref } from '#hooks/useLocalPref';
 import { useMetaThemeColor } from '#hooks/useMetaThemeColor';
 import { useNavigate } from '#hooks/useNavigate';
+import { useNewsNotification } from '#hooks/useNewsNotification';
 import { ScrollProvider } from '#hooks/useScrollListener';
 import { addNotification } from '#notifications/notificationsSlice';
 import { useDispatch, useSelector } from '#redux';
@@ -32,16 +33,27 @@ import { GlobalKeys } from './GlobalKeys';
 import { MobileBankSyncAccountEditPage } from './mobile/banksync/MobileBankSyncAccountEditPage';
 import { MobileNavTabs } from './mobile/MobileNavTabs';
 import { TransactionEdit } from './mobile/transactions/TransactionEdit';
+import { NotificationsPage } from './news/NotificationsPage';
 import { Notifications } from './Notifications';
 import { MobilePageHeaderProvider, MobilePageHeaderSlot } from './Page';
 import { Reports } from './reports';
-import { LoadingIndicator } from './reports/LoadingIndicator';
 import { NarrowAlternate, WideComponent } from './responsive';
 import { useMultiuserEnabled } from './ServerContext';
-import { Settings } from './settings';
+import {
+  AdvancedSettings,
+  ExperimentalSettings,
+  GeneralSettings,
+  Settings,
+  SettingsIndex,
+} from './settings';
 import { FloatableSidebar } from './sidebar';
+import { SidebarMenuRoute } from './sidebar/SidebarMenuRoute';
+import { StartPageRedirect } from './StartPageRedirect';
 import { ManageTagsPage } from './tags/ManageTagsPage';
 import { Titlebar } from './Titlebar';
+import { Tour } from './tour/Tour';
+import { TourAutoOffer } from './tour/TourAutoOffer';
+import { TourProvider } from './tour/TourProvider';
 
 function NarrowNotSupported({
   redirectTo = '/budget',
@@ -95,8 +107,6 @@ export function FinancesApp() {
   const dispatch = useDispatch();
   const { t } = useTranslation();
 
-  const { data: accounts, isFetching: isAccountsFetching } = useAccounts();
-
   const versionInfo = useSelector(state => state.app.versionInfo);
   const [notifyWhenUpdateIsAvailable] = useGlobalPref(
     'notifyWhenUpdateIsAvailable',
@@ -106,6 +116,9 @@ export function FinancesApp() {
   );
 
   const multiuserEnabled = useMultiuserEnabled();
+
+  useAutomaticBankSync();
+  useNewsNotification();
 
   const init = useEffectEvent(() => {
     // Wait a little bit to make sure the sync button will get the
@@ -195,297 +208,374 @@ export function FinancesApp() {
   const scrollableRef = useRef<HTMLDivElement>(null);
 
   return (
-    <View style={{ height: '100%' }}>
-      <RouterBehaviors />
-      <GlobalKeys />
-      <CommandBar />
-      <ContextMenu />
-      <View
-        style={{
-          flexDirection: 'row',
-          backgroundColor: theme.pageBackground,
-          flex: 1,
-        }}
-      >
-        <FloatableSidebar />
-
+    <TourProvider>
+      <View style={{ height: '100%' }}>
+        <RouterBehaviors />
+        <GlobalKeys />
+        <CommandBar />
+        <ContextMenu />
+        <TourAutoOffer />
+        <Tour />
         <View
           style={{
-            color: theme.pageText,
+            flexDirection: 'row',
             backgroundColor: theme.pageBackground,
             flex: 1,
-            overflow: 'hidden',
-            width: '100%',
           }}
         >
-          <ScrollProvider
-            isDisabled={!isNarrowWidth}
-            scrollableRef={scrollableRef}
+          <FloatableSidebar />
+
+          <View
+            style={{
+              color: theme.pageText,
+              backgroundColor: theme.pageBackground,
+              flex: 1,
+              overflow: 'hidden',
+              width: '100%',
+            }}
           >
-            <MobilePageHeaderProvider>
-              <View
-                ref={scrollableRef}
-                style={{
-                  flex: 1,
-                  overflow: 'auto',
-                  position: 'relative',
-                }}
-              >
-                <Titlebar
+            <ScrollProvider
+              isDisabled={!isNarrowWidth}
+              scrollableRef={scrollableRef}
+            >
+              <MobilePageHeaderProvider>
+                <View
+                  ref={scrollableRef}
                   style={{
-                    WebkitAppRegion: 'drag',
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    zIndex: 1000,
+                    flex: 1,
+                    overflow: 'auto',
+                    position: 'relative',
                   }}
-                />
-                <Notifications />
-                <BankSyncStatus />
-                {isNarrowWidth && <MobilePageHeaderSlot />}
+                >
+                  <Titlebar
+                    style={{
+                      WebkitAppRegion: 'drag',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      zIndex: 1000,
+                    }}
+                  />
+                  <Notifications />
+                  <BankSyncStatus />
+                  {isNarrowWidth && <MobilePageHeaderSlot />}
+
+                  <Routes>
+                    <Route path="/" element={<StartPageRedirect />} />
+
+                    <Route path="/reports/*" element={<Reports />} />
+
+                    <Route
+                      path="/budget"
+                      element={
+                        <ErrorBoundary
+                          FallbackComponent={FeatureErrorFallback}
+                          resetKeys={[location.pathname]}
+                        >
+                          <NarrowAlternate name="Budget" />
+                        </ErrorBoundary>
+                      }
+                    />
+
+                    <Route
+                      path="/schedules"
+                      element={
+                        <SidebarMenuRoute id="schedules">
+                          <ErrorBoundary
+                            FallbackComponent={FeatureErrorFallback}
+                            resetKeys={[location.pathname]}
+                          >
+                            <NarrowAlternate name="Schedules" />
+                          </ErrorBoundary>
+                        </SidebarMenuRoute>
+                      }
+                    />
+                    <Route
+                      path="/schedules/:id"
+                      element={
+                        <ErrorBoundary
+                          FallbackComponent={FeatureErrorFallback}
+                          resetKeys={[location.pathname]}
+                        >
+                          <WideNotSupported>
+                            <NarrowAlternate name="ScheduleEdit" />
+                          </WideNotSupported>
+                        </ErrorBoundary>
+                      }
+                    />
+
+                    <Route
+                      path="/payees/:id"
+                      element={
+                        <ErrorBoundary
+                          FallbackComponent={FeatureErrorFallback}
+                          resetKeys={[location.pathname]}
+                        >
+                          <WideNotSupported redirectTo="/settings/payees">
+                            <NarrowAlternate name="PayeeEdit" />
+                          </WideNotSupported>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="/rules/:id"
+                      element={
+                        <ErrorBoundary
+                          FallbackComponent={FeatureErrorFallback}
+                          resetKeys={[location.pathname]}
+                        >
+                          <WideNotSupported redirectTo="/settings/rules">
+                            <NarrowAlternate name="RuleEdit" />
+                          </WideNotSupported>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="/bank-sync/account/:accountId/edit"
+                      element={
+                        <ErrorBoundary
+                          FallbackComponent={FeatureErrorFallback}
+                          resetKeys={[location.pathname]}
+                        >
+                          <WideNotSupported redirectTo="/settings/bank-sync">
+                            <MobileBankSyncAccountEditPage />
+                          </WideNotSupported>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="/payees"
+                      element={
+                        <SidebarMenuRoute id="payees">
+                          <ErrorBoundary
+                            FallbackComponent={FeatureErrorFallback}
+                            resetKeys={[location.pathname]}
+                          >
+                            <NarrowAlternate name="Payees" />
+                          </ErrorBoundary>
+                        </SidebarMenuRoute>
+                      }
+                    />
+                    <Route
+                      path="/tags"
+                      element={
+                        <SidebarMenuRoute id="tags">
+                          <ManageTagsPage />
+                        </SidebarMenuRoute>
+                      }
+                    />
+                    <Route
+                      path="/rules"
+                      element={
+                        <SidebarMenuRoute id="rules">
+                          <ErrorBoundary
+                            FallbackComponent={FeatureErrorFallback}
+                            resetKeys={[location.pathname]}
+                          >
+                            <NarrowAlternate name="Rules" />
+                          </ErrorBoundary>
+                        </SidebarMenuRoute>
+                      }
+                    />
+                    <Route
+                      path="/bank-sync"
+                      element={
+                        <SidebarMenuRoute id="bank-sync">
+                          <ErrorBoundary
+                            FallbackComponent={FeatureErrorFallback}
+                            resetKeys={[location.pathname]}
+                          >
+                            <View style={{ flexShrink: 0, paddingTop: 10 }}>
+                              <NarrowAlternate name="BankSync" />
+                            </View>
+                          </ErrorBoundary>
+                        </SidebarMenuRoute>
+                      }
+                    />
+                    <Route
+                      path="/notifications"
+                      element={<NotificationsPage />}
+                    />
+                    <Route path="/settings" element={<Settings />}>
+                      <Route index element={<SettingsIndex />} />
+                      <Route path="general" element={<GeneralSettings />} />
+                      <Route
+                        path="schedules"
+                        element={
+                          <SidebarMenuRoute id="schedules" isInSettings>
+                            <ErrorBoundary
+                              FallbackComponent={FeatureErrorFallback}
+                              resetKeys={[location.pathname]}
+                            >
+                              <NarrowAlternate name="Schedules" />
+                            </ErrorBoundary>
+                          </SidebarMenuRoute>
+                        }
+                      />
+                      <Route
+                        path="payees"
+                        element={
+                          <SidebarMenuRoute id="payees" isInSettings>
+                            <ErrorBoundary
+                              FallbackComponent={FeatureErrorFallback}
+                              resetKeys={[location.pathname]}
+                            >
+                              <NarrowAlternate name="Payees" />
+                            </ErrorBoundary>
+                          </SidebarMenuRoute>
+                        }
+                      />
+                      <Route
+                        path="tags"
+                        element={
+                          <SidebarMenuRoute id="tags" isInSettings>
+                            <ManageTagsPage />
+                          </SidebarMenuRoute>
+                        }
+                      />
+                      <Route
+                        path="rules"
+                        element={
+                          <SidebarMenuRoute id="rules" isInSettings>
+                            <ErrorBoundary
+                              FallbackComponent={FeatureErrorFallback}
+                              resetKeys={[location.pathname]}
+                            >
+                              <NarrowAlternate name="Rules" />
+                            </ErrorBoundary>
+                          </SidebarMenuRoute>
+                        }
+                      />
+                      <Route
+                        path="bank-sync"
+                        element={
+                          <SidebarMenuRoute id="bank-sync" isInSettings>
+                            <ErrorBoundary
+                              FallbackComponent={FeatureErrorFallback}
+                              resetKeys={[location.pathname]}
+                            >
+                              <NarrowAlternate name="BankSync" />
+                            </ErrorBoundary>
+                          </SidebarMenuRoute>
+                        }
+                      />
+                      <Route path="advanced" element={<AdvancedSettings />} />
+                      <Route
+                        path="experimental"
+                        element={<ExperimentalSettings />}
+                      />
+                    </Route>
+
+                    <Route
+                      path="/gocardless/link"
+                      element={
+                        <NarrowNotSupported>
+                          <WideComponent name="GoCardlessLink" />
+                        </NarrowNotSupported>
+                      }
+                    />
+
+                    <Route
+                      path="/enablebanking/auth_callback"
+                      element={<EnableBankingCallback />}
+                    />
+
+                    <Route
+                      path="/accounts"
+                      element={
+                        <ErrorBoundary
+                          FallbackComponent={FeatureErrorFallback}
+                          resetKeys={[location.pathname]}
+                        >
+                          <NarrowAlternate name="Accounts" />
+                        </ErrorBoundary>
+                      }
+                    />
+
+                    <Route
+                      path="/accounts/:id"
+                      element={
+                        <ErrorBoundary
+                          FallbackComponent={FeatureErrorFallback}
+                          resetKeys={[location.pathname]}
+                        >
+                          <NarrowAlternate name="Account" />
+                        </ErrorBoundary>
+                      }
+                    />
+
+                    <Route
+                      path="/transactions/:transactionId"
+                      element={
+                        <ErrorBoundary
+                          FallbackComponent={FeatureErrorFallback}
+                          resetKeys={[location.pathname]}
+                        >
+                          <WideNotSupported>
+                            <TransactionEdit />
+                          </WideNotSupported>
+                        </ErrorBoundary>
+                      }
+                    />
+
+                    <Route
+                      path="/categories/:id"
+                      element={
+                        <ErrorBoundary
+                          FallbackComponent={FeatureErrorFallback}
+                          resetKeys={[location.pathname]}
+                        >
+                          <NarrowAlternate name="Category" />
+                        </ErrorBoundary>
+                      }
+                    />
+                    {multiuserEnabled && (
+                      <Route
+                        path="/user-directory"
+                        element={
+                          <ProtectedRoute
+                            permission={Permissions.ADMINISTRATOR}
+                            element={<UserDirectoryPage />}
+                          />
+                        }
+                      />
+                    )}
+                    {multiuserEnabled && (
+                      <Route
+                        path="/user-access"
+                        element={
+                          <ProtectedRoute
+                            permission={Permissions.ADMINISTRATOR}
+                            validateOwner
+                            element={<UserAccessPage />}
+                          />
+                        }
+                      />
+                    )}
+                    {/* redirect all other traffic to the budget page */}
+                    <Route path="/*" element={<StartPageRedirect />} />
+                  </Routes>
+                </View>
 
                 <Routes>
+                  <Route path="/budget" element={<MobileNavTabs />} />
+                  <Route path="/accounts" element={<MobileNavTabs />} />
+                  <Route path="/settings/*" element={<MobileNavTabs />} />
+                  <Route path="/notifications" element={<MobileNavTabs />} />
+                  <Route path="/reports" element={<MobileNavTabs />} />
                   <Route
-                    path="/"
-                    element={
-                      isAccountsFetching || !accounts ? (
-                        <LoadingIndicator />
-                      ) : accounts.length > 0 ? (
-                        <Navigate to="/budget" replace />
-                      ) : (
-                        // If there are no accounts, we want to redirect the user to
-                        // the All Accounts screen which will prompt them to add an account
-                        <Navigate to="/accounts" replace />
-                      )
-                    }
+                    path="/reports/:dashboardId"
+                    element={<MobileNavTabs />}
                   />
-
-                  <Route path="/reports/*" element={<Reports />} />
-
-                  <Route
-                    path="/budget"
-                    element={
-                      <ErrorBoundary
-                        FallbackComponent={FeatureErrorFallback}
-                        resetKeys={[location.pathname]}
-                      >
-                        <NarrowAlternate name="Budget" />
-                      </ErrorBoundary>
-                    }
-                  />
-
-                  <Route
-                    path="/schedules"
-                    element={
-                      <ErrorBoundary
-                        FallbackComponent={FeatureErrorFallback}
-                        resetKeys={[location.pathname]}
-                      >
-                        <NarrowAlternate name="Schedules" />
-                      </ErrorBoundary>
-                    }
-                  />
-                  <Route
-                    path="/schedules/:id"
-                    element={
-                      <ErrorBoundary
-                        FallbackComponent={FeatureErrorFallback}
-                        resetKeys={[location.pathname]}
-                      >
-                        <WideNotSupported>
-                          <NarrowAlternate name="ScheduleEdit" />
-                        </WideNotSupported>
-                      </ErrorBoundary>
-                    }
-                  />
-
-                  <Route
-                    path="/payees"
-                    element={
-                      <ErrorBoundary
-                        FallbackComponent={FeatureErrorFallback}
-                        resetKeys={[location.pathname]}
-                      >
-                        <NarrowAlternate name="Payees" />
-                      </ErrorBoundary>
-                    }
-                  />
-                  <Route
-                    path="/payees/:id"
-                    element={
-                      <ErrorBoundary
-                        FallbackComponent={FeatureErrorFallback}
-                        resetKeys={[location.pathname]}
-                      >
-                        <WideNotSupported>
-                          <NarrowAlternate name="PayeeEdit" />
-                        </WideNotSupported>
-                      </ErrorBoundary>
-                    }
-                  />
-                  <Route
-                    path="/rules"
-                    element={
-                      <ErrorBoundary
-                        FallbackComponent={FeatureErrorFallback}
-                        resetKeys={[location.pathname]}
-                      >
-                        <NarrowAlternate name="Rules" />
-                      </ErrorBoundary>
-                    }
-                  />
-                  <Route
-                    path="/rules/:id"
-                    element={
-                      <ErrorBoundary
-                        FallbackComponent={FeatureErrorFallback}
-                        resetKeys={[location.pathname]}
-                      >
-                        <NarrowAlternate name="RuleEdit" />
-                      </ErrorBoundary>
-                    }
-                  />
-                  <Route
-                    path="/bank-sync"
-                    element={
-                      <ErrorBoundary
-                        FallbackComponent={FeatureErrorFallback}
-                        resetKeys={[location.pathname]}
-                      >
-                        <NarrowAlternate name="BankSync" />
-                      </ErrorBoundary>
-                    }
-                  />
-                  <Route
-                    path="/bank-sync/account/:accountId/edit"
-                    element={
-                      <ErrorBoundary
-                        FallbackComponent={FeatureErrorFallback}
-                        resetKeys={[location.pathname]}
-                      >
-                        <WideNotSupported redirectTo="/bank-sync">
-                          <MobileBankSyncAccountEditPage />
-                        </WideNotSupported>
-                      </ErrorBoundary>
-                    }
-                  />
-                  <Route path="/tags" element={<ManageTagsPage />} />
-                  <Route path="/settings" element={<Settings />} />
-
-                  <Route
-                    path="/gocardless/link"
-                    element={
-                      <NarrowNotSupported>
-                        <WideComponent name="GoCardlessLink" />
-                      </NarrowNotSupported>
-                    }
-                  />
-
-                  <Route
-                    path="/enablebanking/auth_callback"
-                    element={<EnableBankingCallback />}
-                  />
-
-                  <Route
-                    path="/accounts"
-                    element={
-                      <ErrorBoundary
-                        FallbackComponent={FeatureErrorFallback}
-                        resetKeys={[location.pathname]}
-                      >
-                        <NarrowAlternate name="Accounts" />
-                      </ErrorBoundary>
-                    }
-                  />
-
-                  <Route
-                    path="/accounts/:id"
-                    element={
-                      <ErrorBoundary
-                        FallbackComponent={FeatureErrorFallback}
-                        resetKeys={[location.pathname]}
-                      >
-                        <NarrowAlternate name="Account" />
-                      </ErrorBoundary>
-                    }
-                  />
-
-                  <Route
-                    path="/transactions/:transactionId"
-                    element={
-                      <ErrorBoundary
-                        FallbackComponent={FeatureErrorFallback}
-                        resetKeys={[location.pathname]}
-                      >
-                        <WideNotSupported>
-                          <TransactionEdit />
-                        </WideNotSupported>
-                      </ErrorBoundary>
-                    }
-                  />
-
-                  <Route
-                    path="/categories/:id"
-                    element={
-                      <ErrorBoundary
-                        FallbackComponent={FeatureErrorFallback}
-                        resetKeys={[location.pathname]}
-                      >
-                        <NarrowAlternate name="Category" />
-                      </ErrorBoundary>
-                    }
-                  />
-                  {multiuserEnabled && (
-                    <Route
-                      path="/user-directory"
-                      element={
-                        <ProtectedRoute
-                          permission={Permissions.ADMINISTRATOR}
-                          element={<UserDirectoryPage />}
-                        />
-                      }
-                    />
-                  )}
-                  {multiuserEnabled && (
-                    <Route
-                      path="/user-access"
-                      element={
-                        <ProtectedRoute
-                          permission={Permissions.ADMINISTRATOR}
-                          validateOwner
-                          element={<UserAccessPage />}
-                        />
-                      }
-                    />
-                  )}
-                  {/* redirect all other traffic to the budget page */}
-                  <Route
-                    path="/*"
-                    element={<Navigate to="/budget" replace />}
-                  />
+                  <Route path="/schedules" element={<MobileNavTabs />} />
+                  <Route path="*" element={null} />
                 </Routes>
-              </View>
-
-              <Routes>
-                <Route path="/budget" element={<MobileNavTabs />} />
-                <Route path="/accounts" element={<MobileNavTabs />} />
-                <Route path="/settings" element={<MobileNavTabs />} />
-                <Route path="/reports" element={<MobileNavTabs />} />
-                <Route
-                  path="/reports/:dashboardId"
-                  element={<MobileNavTabs />}
-                />
-                <Route path="/bank-sync" element={<MobileNavTabs />} />
-                <Route path="/rules" element={<MobileNavTabs />} />
-                <Route path="/payees" element={<MobileNavTabs />} />
-                <Route path="/schedules" element={<MobileNavTabs />} />
-                <Route path="*" element={null} />
-              </Routes>
-            </MobilePageHeaderProvider>
-          </ScrollProvider>
+              </MobilePageHeaderProvider>
+            </ScrollProvider>
+          </View>
         </View>
       </View>
-    </View>
+    </TourProvider>
   );
 }

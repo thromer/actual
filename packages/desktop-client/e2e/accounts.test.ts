@@ -1,6 +1,6 @@
 import { join } from 'path';
 
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
 import type { AccountPage } from './page-models/account-page';
@@ -39,6 +39,22 @@ test.describe('Accounts', () => {
     await expect(transaction.category).toHaveText('Starting Balances');
     await expect(transaction.debit).toHaveText('');
     await expect(transaction.credit).toHaveText('100.00');
+    await expect(page).toMatchThemeScreenshots();
+  });
+
+  test('account register widens amount columns for large balances', async () => {
+    accountPage = await navigation.createAccount({
+      name: 'Large Balance Account',
+      offBudget: false,
+      balance: 12345678.9,
+    });
+
+    const transaction = accountPage.getNthTransaction(0);
+    await expect(transaction.credit).toHaveText('12,345,678.90');
+
+    const creditBox = await transaction.credit.boundingBox();
+    expect(creditBox?.width).toBeGreaterThan(100); // default width is 100px
+
     await expect(page).toMatchThemeScreenshots();
   });
 
@@ -101,6 +117,59 @@ test.describe('Accounts', () => {
     await page.keyboard.press('Tab');
 
     await expect(transaction.balance).toHaveText('25.00');
+  });
+
+  test('bulk editing the date shows a properly formatted date picker', async () => {
+    async function measure(locator: Locator) {
+      const box = await locator.boundingBox();
+      if (!box) {
+        throw new Error('Could not measure the date picker modal');
+      }
+      return box;
+    }
+
+    accountPage = await navigation.goToAccountPage('Ally Savings');
+    await accountPage.waitFor();
+
+    await accountPage.selectNthTransaction(0);
+    await accountPage.clickSelectAction('Date');
+
+    const dialog = page.getByRole('dialog');
+    const calendarGrid = dialog.locator('.react-aria-CalendarGrid');
+    await expect(calendarGrid).toBeVisible();
+
+    // The calendar is horizontally centered in the modal, not pinned to a side
+    const dialogBox = await measure(dialog);
+    const calendarGridBox = await measure(calendarGrid);
+    const leftGap = calendarGridBox.x - dialogBox.x;
+    const rightGap =
+      dialogBox.x +
+      dialogBox.width -
+      (calendarGridBox.x + calendarGridBox.width);
+    expect(Math.abs(leftGap - rightGap)).toBeLessThanOrEqual(2);
+
+    // The calendar is fully visible even for months spanning six rows
+    // (April 2017 relative to the pinned e2e date of January 2017)
+    await dialog.getByRole('button', { name: 'Next month' }).click();
+    await dialog.getByRole('button', { name: 'Next month' }).click();
+    await dialog.getByRole('button', { name: 'Next month' }).click();
+    await expect(dialog.locator('.calendar-header-title')).toHaveText(
+      'April 2017',
+    );
+
+    const sixRowDialogBox = await measure(dialog);
+    const sixRowGridBox = await measure(calendarGrid);
+    expect(sixRowGridBox.y + sixRowGridBox.height).toBeLessThanOrEqual(
+      sixRowDialogBox.y + sixRowDialogBox.height,
+    );
+
+    await expect(dialog).toMatchThemeScreenshots();
+
+    // On a wide screen the modal keeps a bounded width instead of
+    // stretching to fit the 100%-wide calendar grid
+    await page.setViewportSize({ width: 2560, height: 1080 });
+    const wideDialogBox = await measure(dialog);
+    expect(wideDialogBox.width).toBeLessThanOrEqual(700);
   });
 
   test('shift-click range selection skips hidden reconciled transactions', async () => {
@@ -255,6 +324,31 @@ test.describe('Accounts', () => {
       await importCsv(true);
     });
 
+    test('preserves QIF categories in preview and imported transactions', async () => {
+      const fileChooserPromise = page.waitForEvent('filechooser');
+      await accountPage.page.getByRole('button', { name: 'Import' }).click();
+
+      const fileChooser = await fileChooserPromise;
+      await fileChooser.setFiles(join(__dirname, 'data/qif-categories.qif'));
+
+      const dialog = page.getByRole('dialog');
+      await expect(dialog.getByText('Food', { exact: true })).toBeVisible();
+      await expect(dialog.getByText('Income', { exact: true })).toBeVisible();
+
+      await dialog
+        .getByRole('button', { name: 'Import 2 transactions' })
+        .click();
+
+      const expense = accountPage.transactionTableRow.filter({
+        hasText: 'QIF Cafe',
+      });
+      const income = accountPage.transactionTableRow.filter({
+        hasText: 'QIF Salary',
+      });
+      await expect(expense.getByTestId('category')).toHaveText('Food');
+      await expect(income.getByTestId('category')).toHaveText('Income');
+    });
+
     test('import csv file twice', async () => {
       await importCsv(false);
 
@@ -278,6 +372,55 @@ test.describe('Accounts', () => {
       await accountPage.page.getByRole('button', { name: 'Close' }).click();
 
       await expect(importButton).not.toBeVisible();
+    });
+
+    test('imports a new transaction when an unchecked match has the same amount', async () => {
+      async function openCsv(content: string) {
+        const fileChooserPromise = page.waitForEvent('filechooser');
+        await accountPage.page.getByRole('button', { name: 'Import' }).click();
+        const fileChooser = await fileChooserPromise;
+        await fileChooser.setFiles({
+          name: 'same-amount.csv',
+          mimeType: 'text/csv',
+          buffer: Buffer.from(content),
+        });
+        return page.getByRole('dialog');
+      }
+
+      let dialog = await openCsv(
+        'Date,Payee,Notes,Amount\n2024-08-02,Netflix,,-8.99\n',
+      );
+      await dialog
+        .getByRole('button', { name: 'Import 1 transactions' })
+        .click();
+      await expect(dialog).not.toBeVisible();
+
+      // Netflix matches the existing transaction; Corner Coffee is new.
+      dialog = await openCsv(
+        'Date,Payee,Notes,Amount\n' +
+          '2024-08-02,Netflix,Subscription,-8.99\n' +
+          '2024-07-31,Corner Coffee,Latte,-8.99\n',
+      );
+      await expect(dialog.getByText('Corner Coffee')).toBeVisible();
+
+      // Uncheck the Netflix row: merge -> import as new -> skip
+      const netflixCheckbox = dialog
+        .getByTestId('row')
+        .filter({ hasText: 'Netflix' })
+        .getByRole('checkbox');
+      await netflixCheckbox.click();
+      await netflixCheckbox.click();
+      await dialog
+        .getByRole('button', { name: 'Import 1 transactions' })
+        .click();
+      await expect(dialog).not.toBeVisible();
+
+      await expect(
+        accountPage.transactionTableRow.filter({ hasText: 'Corner Coffee' }),
+      ).toBeVisible();
+      await expect(
+        accountPage.transactionTableRow.filter({ hasText: 'Subscription' }),
+      ).toHaveCount(0);
     });
 
     test('import notes checkbox is not shown for CSV files', async () => {

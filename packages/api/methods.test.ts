@@ -954,6 +954,33 @@ describe('API CRUD operations', () => {
     expect(transactions).toHaveLength(1);
   });
 
+  // apis: mergeTransactions
+  test('Transactions: successfully merge two transactions', async () => {
+    const accountId = await api.createAccount({ name: 'test-account' }, 0);
+
+    await api.addTransactions(accountId, [
+      { date: '2023-11-03', amount: 100, notes: 'notes' },
+      { date: '2023-11-03', amount: 100, imported_id: '1' },
+    ]);
+
+    const before = await api.getTransactions(
+      accountId,
+      '2023-11-01',
+      '2023-11-30',
+    );
+    expect(before).toHaveLength(2);
+
+    const keptId = await api.mergeTransactions([before[0].id, before[1].id]);
+
+    const after = await api.getTransactions(
+      accountId,
+      '2023-11-01',
+      '2023-11-30',
+    );
+    expect(after).toHaveLength(1);
+    expect(after[0]).toMatchObject({ id: keptId, notes: 'notes' });
+  });
+
   test('Transactions: import notes are preserved when importing', async () => {
     const accountId = await api.createAccount({ name: 'test-account' }, 0);
 
@@ -1197,6 +1224,116 @@ test('Schedules: successfully complete schedules operations', async () => {
   );
 });
 
+describe('API schedules: getScheduleDates', () => {
+  beforeEach(async () => {
+    await api.loadBudget(budgetName);
+  });
+
+  // apis: createSchedule, getSchedules, getScheduleDates
+  test('expands the date of a stored schedule', async () => {
+    const id = await api.createSchedule({
+      name: 'rent',
+      amount: -120000,
+      amountOp: 'is',
+      posts_transaction: false,
+      date: {
+        frequency: 'monthly',
+        start: '2024-06-01',
+        skipWeekend: true,
+        weekendSolveMode: 'after',
+        endMode: 'never',
+      },
+    });
+    const [schedule] = (await api.getSchedules()).filter(s => s.id === id);
+
+    expect(
+      await api.getScheduleDates(schedule.date, {
+        start: '2024-06-01',
+        end: '2024-09-30',
+      }),
+    ).toEqual(['2024-06-03', '2024-07-01', '2024-08-01', '2024-09-02']);
+  });
+
+  // apis: createSchedule, getSchedules, getScheduleDates
+  test('starts at the next date the app shows and never repeats a date', async () => {
+    // Tests run with today pinned to Sunday 2017-01-01. The occurrences on
+    // Saturday 31 December and Sunday 1 January both move to Monday 2
+    // January, which must be listed once and match the stored next_date.
+    const id = await api.createSchedule({
+      name: 'daily weekdays',
+      amount: -500,
+      amountOp: 'is',
+      posts_transaction: false,
+      date: {
+        frequency: 'daily',
+        start: '2016-12-31',
+        skipWeekend: true,
+        weekendSolveMode: 'after',
+        endMode: 'never',
+      },
+    });
+    const [schedule] = (await api.getSchedules()).filter(s => s.id === id);
+
+    const dates = await api.getScheduleDates(schedule.date, { count: 3 });
+    expect(dates[0]).toEqual(schedule.next_date);
+    expect(dates).toEqual(['2017-01-02', '2017-01-03', '2017-01-04']);
+  });
+
+  // apis: getScheduleDates
+  test('expands a single date', async () => {
+    expect(
+      await api.getScheduleDates('2024-06-13', {
+        start: '2024-06-01',
+        end: '2024-06-30',
+      }),
+    ).toEqual(['2024-06-13']);
+  });
+
+  // apis: getScheduleDates
+  test('starts from today when no start is given', async () => {
+    // Tests run with today pinned to 2017-01-01.
+    expect(
+      await api.getScheduleDates(
+        { frequency: 'yearly', start: '2016-03-01' },
+        { count: 1 },
+      ),
+    ).toEqual(['2017-03-01']);
+  });
+
+  // apis: getScheduleDates
+  test('rejects invalid requests', async () => {
+    const daily = { frequency: 'daily', start: '2024-01-01' } as const;
+
+    await expect(
+      api.getScheduleDates(daily, { start: '2024-13-01', count: 1 }),
+    ).rejects.toThrow('Invalid start date');
+    await expect(
+      api.getScheduleDates(daily, { start: '2024-02-01', end: '2024-01-01' }),
+    ).rejects.toThrow('is before start');
+    await expect(
+      api.getScheduleDates(daily, { start: '2024-01-01', count: -1 }),
+    ).rejects.toThrow('count must be a non-negative integer');
+    await expect(
+      api.getScheduleDates(daily, { start: '2024-01-01' }),
+    ).rejects.toThrow('needs an `end` date or a `count`');
+    await expect(
+      api.getScheduleDates(
+        { ...daily, endMode: 'after_n_occurrences', endOccurrences: 0 },
+        { start: '2024-01-01' },
+      ),
+    ).rejects.toThrow('endOccurrences must be a positive integer');
+    await expect(
+      api.getScheduleDates(
+        { ...daily, endMode: 'on_date', endDate: 'soon' },
+        { start: '2024-01-01' },
+      ),
+    ).rejects.toThrow('Invalid recurrence end date');
+    await expect(
+      api.getScheduleDates('06/13/2024', { start: '2024-01-01' }),
+    ).rejects.toThrow('Invalid schedule date');
+  });
+});
+
 // apis: getPreferences
 test('Preferences: successfully read synced preferences', async () => {
   await api.loadBudget(budgetName);
@@ -1214,5 +1351,68 @@ test('Preferences: successfully read synced preferences', async () => {
   expect(preferences).toMatchObject({
     numberFormat: '1.234,56',
     hideFraction: 'true',
+  });
+});
+
+describe('API preferences: setPreference', () => {
+  beforeEach(async () => {
+    await api.loadBudget(budgetName);
+  });
+
+  // apis: setPreference
+  test('successfully sets a single preference', async () => {
+    await api.setPreference('numberFormat', '1,234.5');
+
+    const preferences = await api.getPreferences();
+    expect(preferences.numberFormat).toBe('1,234.5');
+  });
+
+  // apis: setPreference
+  test('can set multiple preferences', async () => {
+    await api.setPreference('numberFormat', '1,234.5');
+    await api.setPreference('hideFraction', 'true');
+    await api.setPreference('defaultCurrencyCode', 'USD');
+
+    const preferences = await api.getPreferences();
+    expect(preferences).toMatchObject({
+      numberFormat: '1,234.5',
+      hideFraction: 'true',
+      defaultCurrencyCode: 'USD',
+    });
+  });
+
+  // apis: setPreference
+  test('can set feature flag preferences', async () => {
+    await api.setPreference('flags.newSidebarUI', 'true');
+
+    const preferences = await api.getPreferences();
+    expect(preferences['flags.newSidebarUI']).toBe('true');
+  });
+
+  // apis: setPreference
+  test('can set account-specific preferences', async () => {
+    const accountId = 'test-account-123';
+    await api.setPreference(
+      `show-account-${accountId}-net-worth-chart`,
+      'false',
+    );
+
+    const preferences = await api.getPreferences();
+    expect(preferences[`show-account-${accountId}-net-worth-chart`]).toBe(
+      'false',
+    );
+  });
+
+  // apis: setPreference
+  test('can set CSV import preferences', async () => {
+    await api.setPreference(
+      `csv-mappings-${budgetName}`,
+      'col1:name,col2:amount',
+    );
+
+    const preferences = await api.getPreferences();
+    expect(preferences[`csv-mappings-${budgetName}`]).toBe(
+      'col1:name,col2:amount',
+    );
   });
 });
