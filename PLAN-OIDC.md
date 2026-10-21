@@ -55,6 +55,8 @@ Expected: the served SPA falls through its catch-all to `/bootstrap` and
 (`ManagementApp.tsx:189`) and the token is consumed. If both behave the same, the
 nested-path reasoning in consumer 3 is wrong and that section needs rework.
 
+**Result**: All 5 tests behave as expected.
+
 ## Phase 1 — prove the end-to-end path, ~30 throwaway lines
 
 Runs the real flow with **no changes to either package**, using the api exactly
@@ -109,6 +111,8 @@ curl -sS "$SERVER/account/validate" -H "X-ACTUAL-TOKEN: $TOKEN"
 Expect `{"status":"ok","data":{"validated":true,…}}` with the OIDC identity in
 `userName` / `loginMethod`. Same endpoint either way, so it should — but the flow
 depends on it.
+
+**Result**: The test script succeeds, and the additional curl call succeeds as well.
 
 ## Phase 2 — only if the flow should live inside the api
 
